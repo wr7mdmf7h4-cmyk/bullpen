@@ -4,14 +4,17 @@ import { z } from "zod";
 
 const RESERVED = new Set(["admin", "demo", "bullpen", "support", "root", "system", "api", "me", "settings"]);
 
-export const usernameSchema = z
+/** Shape of any existing username (used to look users up, e.g. /u/demo). */
+export const usernameLookupSchema = z
   .string()
   .trim()
   .toLowerCase()
   .min(3, "At least 3 characters")
   .max(20, "At most 20 characters")
-  .regex(/^[a-z0-9_]+$/, "Letters, numbers and underscores only")
-  .refine((u) => !RESERVED.has(u), "That username is reserved");
+  .regex(/^[a-z0-9_]+$/, "Letters, numbers and underscores only");
+
+/** Rules for *choosing* a username: same shape, minus reserved names. */
+export const usernameSchema = usernameLookupSchema.refine((u) => !RESERVED.has(u), "That username is reserved");
 
 export const emailSchema = z.string().trim().toLowerCase().pipe(z.email("Enter a valid email").max(254));
 

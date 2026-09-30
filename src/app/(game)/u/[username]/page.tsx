@@ -8,7 +8,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { toneClass } from "@/components/market/delta";
 import { ACHIEVEMENTS } from "@/domain/achievements";
 import { formatBps, formatCents } from "@/domain/money";
-import { usernameSchema } from "@/lib/validators";
+import { usernameLookupSchema } from "@/lib/validators";
 import { cn } from "@/lib/utils";
 import { db } from "@/server/db";
 import { getLeaderboard } from "@/server/leaderboard";
@@ -22,7 +22,7 @@ const monthFmt = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeri
 
 export default async function ProfilePage({ params }: PageProps<"/u/[username]">) {
   const viewer = await requireUser();
-  const parsed = usernameSchema.safeParse(decodeURIComponent((await params).username));
+  const parsed = usernameLookupSchema.safeParse(decodeURIComponent((await params).username));
   if (!parsed.success) notFound();
   const user = await db.user.findUnique({
     where: { username: parsed.data },

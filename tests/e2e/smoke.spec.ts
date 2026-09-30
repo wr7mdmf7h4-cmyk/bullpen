@@ -72,3 +72,27 @@ test("any US-listed stock can be found with ⌘K search and bought", async ({ pa
   await page.mouse.up();
   await expect(page.getByText(/Bought 1 HOOD at \$/)).toBeVisible();
 });
+
+test("the Profile tab opens the signed-in user's profile", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Try the demo" }).first().click();
+  await expect(page).toHaveURL(/\/dashboard/);
+
+  await page.getByRole("button", { name: "Account menu" }).click();
+  await page.getByRole("menuitem", { name: "Profile" }).click();
+  await expect(page).toHaveURL(/\/u\/demo$/);
+  await expect(page.getByRole("heading", { name: "@demo" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Achievements" })).toBeVisible();
+});
+
+test.describe("mobile", () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test("the Profile tab in the bottom bar works", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Try the demo" }).first().click();
+    await expect(page).toHaveURL(/\/dashboard/);
+    await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Profile" }).click();
+    await expect(page.getByRole("heading", { name: "@demo" })).toBeVisible();
+  });
+});
