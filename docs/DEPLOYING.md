@@ -140,7 +140,27 @@ After adding any variable in Vercel, go to **Deployments**, open the **⋯** men
 
 ---
 
-## 7. Make it CV-ready
+## 7. Custom domain (optional)
+
+**Option A: buy it inside Vercel (easiest).** Project → **Settings → Domains** → type the name → **Buy**. Vercel registers it, sets up DNS and HTTPS for you. Done.
+
+**Option B: buy elsewhere (often cheaper).** Cloudflare Registrar, Porkbun and Namecheap all work. Then:
+
+1. In Vercel: Project → **Settings → Domains** → **Add** → enter `yourdomain.com`. Accept the suggestion to also add `www.yourdomain.com` (redirecting to one of them).
+2. Vercel shows the exact DNS records to create (usually an **A** record for the root domain and a **CNAME** for `www`). Copy them into your registrar's DNS settings.
+3. Wait for Vercel to show **Valid Configuration** (minutes to a few hours). HTTPS certificates are issued automatically.
+
+After the domain works:
+
+- Nothing to change in the app itself: Auth.js trusts the host it's served on.
+- If you use Google sign-in, add `https://yourdomain.com/api/auth/callback/google` to the OAuth client's redirect URIs.
+- Update the demo link in `README.md` and the website field on your GitHub repo.
+
+Tip: check the **renewal** price, not just the first-year price, and turn on auto-renew so the link on your CV never dies.
+
+---
+
+## 8. Make it CV-ready
 
 - In `README.md`, replace `YOUR_GITHUB_USERNAME` and `YOUR-DEPLOYMENT` with your real values, then push.
 - On the GitHub repo page, click ⚙️ next to **About** and add a description, your Vercel URL as the website, and topics (`nextjs`, `typescript`, `postgres`, `prisma`, `trading`, `game`).
