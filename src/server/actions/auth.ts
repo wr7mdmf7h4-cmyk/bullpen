@@ -40,7 +40,7 @@ export async function signUpAction(_prev: ActionResult | undefined, formData: Fo
   await signIn("credentials", {
     email: parsed.data.email,
     password: parsed.data.password,
-    redirectTo: "/dashboard?welcome=1",
+    redirectTo: formData.get("next") ? safeRedirect(formData.get("next")) : "/dashboard?welcome=1",
   });
   return { ok: true };
 }

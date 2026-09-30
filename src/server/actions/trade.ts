@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { evaluateAchievements, type UnlockedAchievement } from "../achievements";
+import { invalidateLeaderboard } from "../leaderboard";
 import { recordSnapshot } from "../portfolio";
 import { rateLimit } from "../rate-limit";
 import { notifyLeague } from "../realtime";
@@ -55,6 +56,7 @@ export async function placeTradeAction(input: z.input<typeof tradeSchema>): Prom
         console.error("[trade] achievements failed", e);
         return [];
       });
+      invalidateLeaderboard(parsed.data.leagueId);
       await notifyLeague(parsed.data.leagueId, "activity");
     }
     revalidatePath("/", "layout");

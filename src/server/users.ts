@@ -70,9 +70,9 @@ export const getCurrentUser = cache(async () => {
 });
 
 /** For pages/actions that need a fully onboarded user. */
-export async function requireUser() {
+export async function requireUser(returnTo?: string) {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  if (!user) redirect(returnTo ? `/login?next=${encodeURIComponent(returnTo)}` : "/login");
   if (!user.username) redirect("/onboarding");
   return user as typeof user & { username: string };
 }

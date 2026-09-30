@@ -29,7 +29,10 @@ export default async function LogInPage({ searchParams }: PageProps<"/login">) {
       </div>
       <p className="text-center text-sm text-muted-foreground">
         New here?{" "}
-        <Link href="/signup" className="font-medium text-foreground underline-offset-4 hover:underline">
+        <Link
+          href={typeof next === "string" ? `/signup?next=${encodeURIComponent(next)}` : "/signup"}
+          className="font-medium text-foreground underline-offset-4 hover:underline"
+        >
           Create an account
         </Link>
       </p>

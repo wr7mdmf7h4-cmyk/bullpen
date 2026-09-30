@@ -93,11 +93,12 @@ export function LogInForm({ next }: { next?: string }) {
   );
 }
 
-export function SignUpForm() {
+export function SignUpForm({ next }: { next?: string }) {
   const [state, action] = useActionState(signUpAction, undefined);
   const errors = fieldErrors(state);
   return (
     <form action={action} className="grid gap-4">
+      <input type="hidden" name="next" value={next ?? ""} />
       <Field name="email" label="Email" type="email" autoComplete="email" required error={errors.email} />
       <Field
         name="username"
