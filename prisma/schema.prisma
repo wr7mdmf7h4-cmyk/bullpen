@@ -1,0 +1,218 @@
+// Bullpen database schema.
+//
+// Money is always stored as integer cents (Int). Prices are rounded to the
+// cent at quote time; fees are rounded half-up to the cent. Postgres CHECK
+// constraints (see migrations/*_check_constraints) back up the application
+// invariants so that a bug can never produce negative cash or shares.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────── Users ───────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  /// null until the user picks one (Google sign-ups go through /onboarding)
+  username     String?  @unique
+  /// argon2id hash; null for Google-only accounts
+  passwordHash String?
+  /// seed for the generated DiceBear avatar
+  avatarSeed   String
+  bio          String?
+  isDemo       Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  portfolios    Portfolio[]
+  ownedLeagues  League[]          @relation("LeagueOwner")
+  achievements  UserAchievement[]
+  activity      ActivityEvent[]
+}
+
+// ─────────────────────────── Leagues ───────────────────────────
+
+enum LeagueKind {
+  GLOBAL
+  PRACTICE
+  PRIVATE
+}
+
+enum MarketSource {
+  /// real quotes (Finnhub) when configured, US market hours enforced
+  LIVE
+  /// deterministic simulated market, always open
+  SIMULATED
+}
+
+model League {
+  id                String       @id @default(cuid())
+  kind              LeagueKind   @default(PRIVATE)
+  marketSource      MarketSource @default(LIVE)
+  name              String
+  /// null for system leagues (Global, Practice)
+  inviteCode        String?      @unique
+  ownerId           String?
+  owner             User?        @relation("LeagueOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  startsAt          DateTime
+  /// null = never ends
+  endsAt            DateTime?
+  startingCashCents Int          @default(1000000)
+  feeFlatCents      Int          @default(100)
+  /// basis points of notional: 10 bps = 0.10%
+  feeBps            Int          @default(10)
+  maxMembers        Int          @default(100)
+  createdAt         DateTime     @default(now())
+
+  portfolios Portfolio[]
+  activity   ActivityEvent[]
+
+  @@index([kind])
+}
+
+// ─────────────────────── Portfolios & trades ───────────────────────
+
+/// A portfolio is one user's entry in one league (it doubles as membership).
+model Portfolio {
+  id               String   @id @default(cuid())
+  userId           String
+  leagueId         String
+  /// CHECK (cash_cents >= 0)
+  cashCents        Int
+  realizedPnlCents Int      @default(0)
+  feesPaidCents    Int      @default(0)
+  tradeCount       Int      @default(0)
+  joinedAt         DateTime @default(now())
+
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  league    League              @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  holdings  Holding[]
+  trades    Trade[]
+  snapshots PortfolioSnapshot[]
+
+  @@unique([userId, leagueId])
+  @@index([leagueId])
+}
+
+model Holding {
+  id             String   @id @default(cuid())
+  portfolioId    String
+  symbol         String
+  /// CHECK (quantity > 0); the row is deleted when a position is closed
+  quantity       Int
+  /// total cost including buy fees; average cost is derived (basis / quantity)
+  costBasisCents Int
+  /// when the current position was opened (used by "Diamond Hands")
+  openedAt       DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  portfolio  Portfolio  @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  instrument Instrument @relation(fields: [symbol], references: [symbol])
+
+  @@unique([portfolioId, symbol])
+}
+
+enum TradeSide {
+  BUY
+  SELL
+}
+
+/// Immutable ledger of filled market orders.
+/// Invariant: cash = startingCash + SUM(netCashCents)
+model Trade {
+  id               String    @id @default(cuid())
+  portfolioId      String
+  symbol           String
+  side             TradeSide
+  quantity         Int
+  priceCents       Int
+  feeCents         Int
+  /// signed cash delta: buy = -(qty*price + fee), sell = qty*price - fee
+  netCashCents     Int
+  /// sells only
+  realizedPnlCents Int?
+  /// client-generated; makes double submits a no-op
+  idempotencyKey   String
+  executedAt       DateTime  @default(now())
+
+  portfolio  Portfolio  @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  instrument Instrument @relation(fields: [symbol], references: [symbol])
+
+  @@unique([portfolioId, idempotencyKey])
+  @@index([portfolioId, executedAt])
+}
+
+model PortfolioSnapshot {
+  id              String   @id @default(cuid())
+  portfolioId     String
+  takenAt         DateTime
+  totalValueCents Int
+  cashCents       Int
+
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+
+  @@unique([portfolioId, takenAt])
+}
+
+// ─────────────────────────── Market data ───────────────────────────
+
+/// The tradable universe (~50 liquid US stocks and ETFs).
+model Instrument {
+  symbol   String  @id
+  name     String
+  sector   String
+  exchange String
+  isActive Boolean @default(true)
+
+  holdings Holding[]
+  trades   Trade[]
+}
+
+/// Last known live quote per symbol. Survives restarts so portfolios can be
+/// valued when the market is closed or the data provider is unavailable.
+model QuoteCache {
+  symbol         String   @id
+  priceCents     Int
+  prevCloseCents Int
+  fetchedAt      DateTime
+}
+
+// ─────────────────────── Gamification & social ───────────────────────
+
+model UserAchievement {
+  userId         String
+  /// definitions live in src/domain/achievements.ts
+  achievementKey String
+  unlockedAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, achievementKey])
+}
+
+enum ActivityType {
+  TRADE
+  ACHIEVEMENT
+  JOINED
+}
+
+model ActivityEvent {
+  id        String       @id @default(cuid())
+  leagueId  String
+  userId    String
+  type      ActivityType
+  /// shape validated with a Zod discriminated union (src/server/activity.ts)
+  payload   Json
+  createdAt DateTime     @default(now())
+
+  league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([leagueId, createdAt(sort: Desc)])
+}
