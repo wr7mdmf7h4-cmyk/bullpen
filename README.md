@@ -197,7 +197,7 @@ Every price a player sees or trades at is real:
 - **Quotes** come from Finnhub through a two-tier cache (memory → Postgres `QuoteCache` → API) that keeps the app inside the free tier's 60 calls/minute: a priority-aware per-instance budget (the stock you're viewing and orders you place always get a fresh price; list refreshes are capped), a 60s TTL while the market is open, and a 30s back-off after an HTTP 429.
 - **No invented prices.** If a fresh quote can't be had, the app shows the last real price it saw, or "price unavailable". Orders only fill against a fresh quote (`isExecutableQuote`), so a stale price can't be exploited.
 - **Real market hours.** Orders fill 9:30am–4pm ET on trading days (NYSE holidays, early closes and DST handled in pure TypeScript); outside those hours you can browse, with a countdown to the open.
-- **Price history is recorded, not generated.** Finnhub's free plan has no historical candles, so Bullpen records every real price it observes into `PriceSample` (each quote's last trade _and_ the previous session's close), plus a daily job after the close for popular and held stocks. Charts are drawn only from those samples, labelled "Real prices recorded by Bullpen since …", and fill in over time. If the API key's plan does include candles, they're used automatically. Portfolio charts likewise use only recorded values: a snapshot on every trade, on views (at most every 15 minutes) and daily.
+- **Price history is real, never generated.** With `TWELVE_DATA_API_KEY`, the first time anyone opens a stock's chart its real history is downloaded (5 years of daily closes, plus 5-minute bars for the last week) into `PriceSample`, then only the gap is topped up; unfinished bars are skipped so a partial day is never stored as a close. Every live Finnhub quote is recorded into the same table, plus a daily close job. Without the key, charts show only what Bullpen has recorded itself and fill in over time. Portfolio charts use recorded values only: a snapshot on every trade, on views (at most every 15 minutes) and daily.
 - **Development and tests** can opt into a deterministic fake market with `FAKE_MARKET_DATA=1` (a pure function of symbol and time, so tests are reproducible). Production ignores it.
 
 ### Optional integrations
@@ -294,7 +294,7 @@ Full click-by-click guide: **[docs/DEPLOYING.md](docs/DEPLOYING.md)**. The short
 - **Fractional shares.** Move quantities to fixed-point (e.g. micro-shares as integers) and extend the domain maths; the cents/bps discipline already makes this mechanical.
 - **Daily/weekly challenges and streaks.** Deterministic challenge rotation seeded by date, with progress rows per user and period.
 - **Materialised leaderboards.** Precompute league standings from snapshots on a schedule (or incrementally on trade) instead of valuing every portfolio on read.
-- **Backfilled history** from a paid data plan (or Twelve Data's free tier) so charts show years of history on day one, plus a candlestick view and volume.
+- **Candlestick view and volume** on top of the backfilled history.
 - **Social layer:** comments and reactions on feed items, head-to-head challenges, end-of-league recap cards to share.
 - **Observability:** structured logging, Sentry, and alerts on trade failures or quote-provider errors.
 - **OTC and international listings**, plus richer metadata (logos, market cap, descriptions) cached from the data provider.

@@ -42,7 +42,7 @@ function describeHistory(meta: HistoryMeta | undefined): { footnote: string; emp
   if (meta.source === "candles") return { footnote: "Real prices · Finnhub", empty: "No trades in this period." };
   const since = meta.since ? ` since ${sinceFmt.format(meta.since)}` : "";
   return {
-    footnote: `Real prices recorded by Bullpen${since}`,
+    footnote: `Real prices${since}`,
     empty:
       "Collecting real price history. Bullpen records every real price it sees, so this chart fills in as the market trades.",
   };

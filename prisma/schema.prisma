@@ -229,3 +229,15 @@ model ActivityEvent {
 
   @@index([leagueId, createdAt(sort: Desc)])
 }
+
+/// Bookkeeping for historical price backfills from the history provider
+/// (Twelve Data), so each symbol's history is downloaded once and then only
+/// topped up.
+model HistoryBackfill {
+  symbol     String
+  /// "1day" or "5min"
+  resolution String
+  fetchedAt  DateTime
+
+  @@id([symbol, resolution])
+}

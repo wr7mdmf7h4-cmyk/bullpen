@@ -20,6 +20,8 @@ const schema = z.object({
   GOOGLE_CLIENT_ID: optional,
   GOOGLE_CLIENT_SECRET: optional,
   FINNHUB_API_KEY: optional,
+  /** optional: real price history (Twelve Data free plan) */
+  TWELVE_DATA_API_KEY: optional,
   ABLY_API_KEY: optional,
   UPSTASH_REDIS_REST_URL: optional,
   UPSTASH_REDIS_REST_TOKEN: optional,

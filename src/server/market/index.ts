@@ -14,6 +14,7 @@ import {
   type FundamentalMetrics,
   type Priority,
 } from "./finnhub";
+import { fetchTimeSeries, type HistoryInterval } from "./twelvedata";
 
 /**
  * Market data: real prices only.
@@ -249,6 +250,65 @@ async function candleHistory(symbol: string, range: ChartRange, now: Date): Prom
   }
 }
 
+// ── history backfill (Twelve Data) ──────────────────────────────────────
+
+const BACKFILL_SIZE: Record<HistoryInterval, number> = {
+  "1day": 1_300, // ~5 years of sessions
+  "5min": 600, // ~7 sessions: covers 1D and 1W
+};
+const inflight = new Map<string, Promise<void>>();
+
+function backfillStaleAfterMs(interval: HistoryInterval, now: Date) {
+  if (interval === "1day") return 12 * 3_600_000;
+  return isMarketOpen(now) ? 5 * 60_000 : 60 * 60_000;
+}
+
+/**
+ * Downloads real history for a symbol once, then tops it up when stale, into
+ * the same PriceSample table live quotes are recorded in. Needs
+ * TWELVE_DATA_API_KEY; failures just leave the recorded history as it is.
+ */
+async function ensureBackfill(symbol: string, interval: HistoryInterval, now: Date) {
+  const key = env().TWELVE_DATA_API_KEY;
+  if (!key) return;
+  const id = `${symbol}:${interval}`;
+  const running = inflight.get(id);
+  if (running) return running;
+
+  const job = (async () => {
+    const mark = await db.historyBackfill.findUnique({
+      where: { symbol_resolution: { symbol, resolution: interval } },
+    });
+    if (mark && now.getTime() - mark.fetchedAt.getTime() < backfillStaleAfterMs(interval, now)) return;
+    // First time: full history. Afterwards: just the gap since the last fetch.
+    const size = mark
+      ? Math.min(
+          BACKFILL_SIZE[interval],
+          Math.ceil((now.getTime() - mark.fetchedAt.getTime()) / (interval === "1day" ? 86_400_000 : 5 * 60_000)) + 5,
+        )
+      : BACKFILL_SIZE[interval];
+    // Only store finished bars: today's daily bar (stamped at 4pm) and the
+    // current 5-minute bar are still moving and would be stored stale.
+    const barMs = interval === "1day" ? 0 : 5 * 60_000;
+    const points = (await fetchTimeSeries(symbol, interval, size, key)).filter((pt) => pt.t + barMs <= now.getTime());
+    if (points.length) {
+      await db.priceSample.createMany({
+        data: points.map((pt) => ({ symbol, takenAt: new Date(pt.t), priceCents: pt.p })),
+        skipDuplicates: true,
+      });
+    }
+    await db.historyBackfill.upsert({
+      where: { symbol_resolution: { symbol, resolution: interval } },
+      create: { symbol, resolution: interval, fetchedAt: now },
+      update: { fetchedAt: now },
+    });
+  })()
+    .catch((err) => console.warn(`[history] ${symbol} ${interval}: ${String(err)}`))
+    .finally(() => inflight.delete(id));
+  inflight.set(id, job);
+  return job;
+}
+
 /** Real prices we've recorded, thinned to one point per day for long ranges. */
 async function recordedHistory(symbol: string, range: ChartRange, now: Date): Promise<History> {
   const from = new Date(rangeStartMs(range, now.getTime()));
@@ -291,7 +351,8 @@ export async function getHistory(
   }
   if (mode() === "none") return { points: [], source: "recorded", since: null };
 
-  const candles = await candleHistory(s, range, now);
+  await ensureBackfill(s, range === "1D" || range === "1W" ? "5min" : "1day", now);
+  const candles = env().TWELVE_DATA_API_KEY ? null : await candleHistory(s, range, now);
   const history: History =
     candles && candles.length > 1
       ? { points: candles, source: "candles", since: candles[0]!.t }
