@@ -11,7 +11,11 @@ const RANGE_LABEL: Record<ChartRange, string> = {
   "1D": "Today",
   "1W": "Past week",
   "1M": "Past month",
+  "3M": "Past 3 months",
+  "6M": "Past 6 months",
+  YTD: "Year to date",
   "1Y": "Past year",
+  "5Y": "Past 5 years",
 };
 
 export type ChartSource =

@@ -12,7 +12,7 @@
 
 import type { InstrumentDef } from "./universe";
 import { getMarketHours, previousSessionClose, sessionOn, sessionsBetween, nyParts, type Session } from "./hours";
-import type { ChartRange, PricePoint, Quote } from "./types";
+import { rangeStartMs, type ChartRange, type PricePoint, type Quote } from "./types";
 
 export type MarketCalendar = "ALWAYS" | "NYSE";
 
@@ -162,14 +162,41 @@ export function simulatedQuote(def: InstrumentDef, calendar: MarketCalendar, now
   };
 }
 
-const RANGE_SPEC: Record<ChartRange, { lookbackMs: number; stepMs: number }> = {
-  "1D": { lookbackMs: 86_400_000, stepMs: 5 * 60_000 },
-  "1W": { lookbackMs: 7 * 86_400_000, stepMs: 30 * 60_000 },
-  "1M": { lookbackMs: 30 * 86_400_000, stepMs: 3 * 3_600_000 },
-  "1Y": { lookbackMs: 365 * 86_400_000, stepMs: 86_400_000 },
+/** Sampling step for the 24/7 calendar: ~150-400 points per range. */
+const ALWAYS_STEP_MS: Record<ChartRange, number> = {
+  "1D": 5 * 60_000,
+  "1W": 30 * 60_000,
+  "1M": 3 * 3_600_000,
+  "3M": 8 * 3_600_000,
+  "6M": 12 * 3_600_000,
+  YTD: 86_400_000,
+  "1Y": 86_400_000,
+  "5Y": 7 * 86_400_000,
 };
 
-/** Price history for a chart range. NYSE calendars only include trading hours. */
+function closesOf(def: InstrumentDef, sessions: Session[], end: number): PricePoint[] {
+  return sessions
+    .filter((s) => s.close.getTime() <= end)
+    .map((s) => ({ t: s.close.getTime(), p: simulatedPriceCents(def, s.close.getTime()) }));
+}
+
+/** Last session of each ISO-ish week (weeks start Monday, UTC). */
+function weeklyCloses(sessions: Session[]): Session[] {
+  const out: Session[] = [];
+  for (const s of sessions) {
+    const week = Math.floor((s.open.getTime() / 86_400_000 + 3) / 7); // epoch was a Thursday
+    const lastWeek = out.length ? Math.floor((out[out.length - 1]!.open.getTime() / 86_400_000 + 3) / 7) : -1;
+    if (week === lastWeek) out[out.length - 1] = s;
+    else out.push(s);
+  }
+  return out;
+}
+
+/**
+ * Price history for a chart range. NYSE calendars only include trading
+ * hours: intraday points for short ranges, daily closes for 3M–1Y and weekly
+ * closes for 5Y.
+ */
 export function simulatedHistory(
   def: InstrumentDef,
   calendar: MarketCalendar,
@@ -177,33 +204,32 @@ export function simulatedHistory(
   now: Date,
 ): PricePoint[] {
   const end = effectiveTime(calendar, now);
-  const spec = RANGE_SPEC[range];
+  const start = Math.min(rangeStartMs(range, end), end - ALWAYS_STEP_MS["1D"]);
 
   if (calendar === "ALWAYS") {
-    return sampleRange(def, [{ from: end - spec.lookbackMs, to: end, stepMs: spec.stepMs }]);
+    return sampleRange(def, [{ from: start, to: end, stepMs: ALWAYS_STEP_MS[range] }]);
   }
 
   if (range === "1D") {
     const s = sessionContaining(new Date(end));
-    return sampleRange(def, [{ from: s.open.getTime(), to: end, stepMs: spec.stepMs }]);
+    return sampleRange(def, [{ from: s.open.getTime(), to: end, stepMs: 5 * 60_000 }]);
   }
 
-  const sessions = sessionsBetween(new Date(end - spec.lookbackMs), new Date(end));
-  if (range === "1Y") {
-    // one point per trading day, at the close
-    const pts = sessions
-      .filter((s) => s.close.getTime() <= end)
-      .map((s) => ({ t: s.close.getTime(), p: simulatedPriceCents(def, s.close.getTime()) }));
-    if (!pts.length || pts[pts.length - 1]!.t !== end) pts.push({ t: end, p: simulatedPriceCents(def, end) });
-    return pts;
+  const sessions = sessionsBetween(new Date(start), new Date(end));
+  if (range === "1W" || range === "1M") {
+    const step = range === "1W" ? 30 * 60_000 : 2 * 3_600_000;
+    return sampleRange(
+      def,
+      sessions
+        .map((s) => ({ from: s.open.getTime(), to: Math.min(s.close.getTime(), end), stepMs: step }))
+        .filter((w) => w.to > w.from),
+    );
   }
-  const step = range === "1W" ? 30 * 60_000 : 2 * 3_600_000;
-  return sampleRange(
-    def,
-    sessions
-      .map((s) => ({ from: s.open.getTime(), to: Math.min(s.close.getTime(), end), stepMs: step }))
-      .filter((w) => w.to > w.from),
-  );
+
+  const pts = closesOf(def, range === "5Y" ? weeklyCloses(sessions) : sessions, end);
+  if (!pts.length || pts[pts.length - 1]!.t !== end) pts.push({ t: end, p: simulatedPriceCents(def, end) });
+  if (pts.length === 1) pts.unshift({ t: start, p: simulatedPriceCents(def, start) }); // e.g. YTD on 2 January
+  return pts;
 }
 
 /** 52-week high/low from daily samples. */

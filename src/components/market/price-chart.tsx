@@ -13,8 +13,8 @@ const dateFmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric
 
 export function formatPointTime(t: number, range: ChartRange) {
   if (range === "1D") return timeFmt.format(t);
-  if (range === "1Y") return dateFmt.format(t);
-  return dayFmt.format(t);
+  if (range === "1W" || range === "1M") return dayFmt.format(t);
+  return dateFmt.format(t);
 }
 
 export type ScrubPoint = { point: PricePoint; range: ChartRange; first: PricePoint; baseline: number } | null;
@@ -169,8 +169,12 @@ export function PriceChart({
         )}
       </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <div role="tablist" aria-label="Chart range" className="flex gap-1">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+        <div
+          role="tablist"
+          aria-label="Chart range"
+          className="-mx-1 flex scrollbar-none gap-0.5 overflow-x-auto px-1 sm:mx-0 sm:px-0"
+        >
           {ranges.map((r) => (
             <button
               key={r}
@@ -178,7 +182,7 @@ export function PriceChart({
               aria-selected={r === range}
               onClick={() => void selectRange(r)}
               className={cn(
-                "relative rounded-full px-3 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground",
+                "relative shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground sm:px-3",
                 r === range && (up ? "text-gain" : "text-loss"),
               )}
             >
@@ -193,7 +197,7 @@ export function PriceChart({
             </button>
           ))}
         </div>
-        {footnote && <div className="text-right text-[11px] text-muted-foreground">{footnote}</div>}
+        {footnote && <div className="text-[11px] text-muted-foreground sm:text-right">{footnote}</div>}
       </div>
     </div>
   );

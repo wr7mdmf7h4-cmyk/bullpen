@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getPopularInstrument, POPULAR } from "./universe";
+import { CHART_RANGES, rangeStartMs } from "./types";
 import {
   anchorInstrument,
   effectiveTime,
@@ -61,7 +62,7 @@ describe("simulated market", () => {
 
   it("returns chart history that ends at the current price", () => {
     const now = new Date("2026-09-29T17:00:00Z");
-    for (const range of ["1D", "1W", "1M", "1Y"] as const) {
+    for (const range of CHART_RANGES) {
       for (const cal of ["ALWAYS", "NYSE"] as const) {
         const pts = simulatedHistory(nvda, cal, range, now);
         expect(pts.length).toBeGreaterThan(5);
@@ -93,5 +94,36 @@ describe("anchorInstrument", () => {
 
   it("ignores nonsense anchors", () => {
     expect(anchorInstrument(nvda, { priceCents: 0, at: anchorAt })).toBe(nvda);
+  });
+});
+
+describe("chart ranges", () => {
+  const now = new Date("2026-09-29T17:00:00Z");
+
+  it.each(CHART_RANGES)("%s has a sensible number of points on both calendars", (range) => {
+    for (const cal of ["ALWAYS", "NYSE"] as const) {
+      const n = simulatedHistory(nvda, cal, range, now).length;
+      expect(n).toBeGreaterThan(5);
+      expect(n).toBeLessThan(600);
+    }
+  });
+
+  it("starts YTD on 1 January", () => {
+    const pts = simulatedHistory(nvda, "ALWAYS", "YTD", now);
+    expect(new Date(pts[0]!.t).toISOString().slice(0, 10)).toBe("2026-01-01");
+    expect(rangeStartMs("YTD", now.getTime())).toBe(Date.UTC(2026, 0, 1));
+  });
+
+  it("uses weekly closes for 5Y on the NYSE calendar", () => {
+    const pts = simulatedHistory(nvda, "NYSE", "5Y", now);
+    expect(pts.length).toBeGreaterThan(250);
+    expect(pts.length).toBeLessThan(265);
+    expect(pts[0]!.t).toBeGreaterThanOrEqual(rangeStartMs("5Y", now.getTime()));
+  });
+
+  it("builds a 5Y history quickly", () => {
+    const t = performance.now();
+    simulatedHistory(nvda, "NYSE", "5Y", now);
+    expect(performance.now() - t).toBeLessThan(250);
   });
 });

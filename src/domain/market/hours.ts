@@ -178,7 +178,7 @@ export function sessionsBetween(from: Date, to: Date): Session[] {
   const out: Session[] = [];
   const p = nyParts(from);
   let day: YMD = { y: p.y, m: p.m, d: p.d };
-  for (let i = 0; i < 400; i++) {
+  for (let i = 0; i < 2_000; i++) {
     const s = sessionOn(day);
     if (s && s.open > to) break;
     if (s && s.close >= from) out.push(s);

@@ -266,15 +266,60 @@ export function simulationProfile(symbol: string, isEtf: boolean): { basePrice: 
 
 export type Searchable = { symbol: string; name: string; isPopular?: boolean };
 
+const WORD_SPLIT = /[\s.,&()'/-]+/;
+
+/**
+ * Edit distance (optimal string alignment: insert, delete, substitute,
+ * swap adjacent) with an early exit once it must exceed `max`.
+ */
+export function editDistance(a: string, b: string, max = Infinity): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev2: number[] = [];
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    let rowMin = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      let v = Math.min(prev[j]! + 1, cur[j - 1]! + 1, prev[j - 1]! + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) v = Math.min(v, prev2[j - 2]! + 1);
+      cur.push(v);
+      rowMin = Math.min(rowMin, v);
+    }
+    if (rowMin > max) return max + 1;
+    prev2 = prev;
+    prev = cur;
+  }
+  return prev[b.length]!;
+}
+
+/** Typo budget grows with word length: none for short tokens, 1 up to 7 letters, then 2. */
+function typoBudget(token: string) {
+  return token.length < 4 ? 0 : token.length <= 7 ? 1 : 2;
+}
+
+/** How closely a query token matches a name word: 0 = prefix, n = n typos, -1 = no match. */
+function tokenMatch(token: string, word: string): number {
+  if (word.startsWith(token)) return 0;
+  const budget = typoBudget(token);
+  if (!budget) return -1;
+  // Compare against the whole word and against a same-length prefix (typing in progress).
+  const d = Math.min(editDistance(token, word, budget), editDistance(token, word.slice(0, token.length), budget));
+  return d <= budget ? d : -1;
+}
+
 /**
  * Case-insensitive ranking over ticker and company name: exact ticker, then
- * ticker prefix, then name prefix/word prefix, then substring. Popular names
- * win ties so "apple" finds AAPL before APLE.
+ * ticker prefix, then name prefix/word prefix, then substring, then
+ * typo-tolerant word matches ("firserv" → Fiserv, "nvidea" → NVIDIA).
+ * Every word of a multi-word query must match. Popular names win ties so
+ * "apple" finds AAPL before APLE.
  */
 export function rankSearch<T extends Searchable>(items: Iterable<T>, query: string, limit = 10): T[] {
   const q = query.trim().toLowerCase();
   const all = [...items];
   if (!q) return all.filter((i) => i.isPopular).slice(0, limit);
+  const tokens = q.split(WORD_SPLIT).filter(Boolean);
   const scored: { item: T; score: number }[] = [];
   for (const item of all) {
     const sym = item.symbol.toLowerCase();
@@ -283,8 +328,26 @@ export function rankSearch<T extends Searchable>(items: Iterable<T>, query: stri
     if (sym === q) score = 0;
     else if (sym.startsWith(q)) score = 10 + sym.length;
     else if (name.startsWith(q)) score = 30;
-    else if (name.split(/[\s.,&()-]+/).some((w) => w.startsWith(q))) score = 40;
-    else if (name.includes(q)) score = 50;
+    else if (name.includes(q)) score = 40;
+    else {
+      // Every query token must match some word of the name (typos allowed).
+      const words = name.split(WORD_SPLIT).filter(Boolean);
+      let typos = 0;
+      for (const token of tokens) {
+        let best = -1;
+        for (const w of words) {
+          const m = tokenMatch(token, w);
+          if (m >= 0 && (best < 0 || m < best)) best = m;
+          if (best === 0) break;
+        }
+        if (best < 0) {
+          typos = -1;
+          break;
+        }
+        typos += best;
+      }
+      if (typos >= 0) score = 50 + typos * 10;
+    }
     if (score < 0) continue;
     if (item.isPopular) score -= 5;
     scored.push({ item, score });

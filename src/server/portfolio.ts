@@ -3,7 +3,7 @@ import { db } from "./db";
 import { getHistory, getQuotes } from "./market";
 import { valuePortfolio, type PortfolioValuation } from "@/domain/portfolio";
 import { leagueStatus, type MarketSourceKind } from "@/domain/leagues";
-import type { ChartRange, PricePoint } from "@/domain/market/types";
+import { rangeStartMs, type ChartRange, type PricePoint } from "@/domain/market/types";
 
 type PortfolioWithHoldings = {
   id: string;
@@ -86,13 +86,6 @@ export async function snapshotAllPortfolios(now = new Date()) {
   return { portfolios: active.length, written: result.count };
 }
 
-const RANGE_MS: Record<ChartRange, number> = {
-  "1D": 86_400_000,
-  "1W": 7 * 86_400_000,
-  "1M": 30 * 86_400_000,
-  "1Y": 365 * 86_400_000,
-};
-
 /**
  * Portfolio value over time.
  *
@@ -107,7 +100,7 @@ export async function getPortfolioHistory(
   range: ChartRange,
   now = new Date(),
 ): Promise<PricePoint[]> {
-  const from = new Date(now.getTime() - RANGE_MS[range]);
+  const from = new Date(rangeStartMs(range, now.getTime()));
   const [before, inRange, detail, lastTrade] = await Promise.all([
     db.portfolioSnapshot.findFirst({
       where: { portfolioId, takenAt: { lt: from } },
@@ -160,7 +153,7 @@ export async function getPortfolioHistory(
 
 /** Value at the start of the current day, for the 1D change on dashboards. */
 export async function getStartOfDayValue(portfolioId: string, fallbackCents: number, now = new Date()) {
-  const from = new Date(now.getTime() - RANGE_MS["1D"]);
+  const from = new Date(rangeStartMs("1D", now.getTime()));
   const snap =
     (await db.portfolioSnapshot.findFirst({
       where: { portfolioId, takenAt: { lt: from } },
