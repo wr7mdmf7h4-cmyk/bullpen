@@ -1,5 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "prisma migrate deploy && (npm run instruments:sync || echo 'Instrument sync skipped; the daily cron will retry') && next build",
+  "buildCommand": "bash scripts/vercel-build.sh",
   "crons": [{ "path": "/api/cron/snapshot", "schedule": "30 21 * * *" }]
 }

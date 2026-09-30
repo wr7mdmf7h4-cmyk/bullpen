@@ -1,24 +1,23 @@
 # Deploying Bullpen: step-by-step
 
-About 30 minutes, all on free tiers. You'll create four accounts (GitHub, Neon, Finnhub, Vercel), load the database from your laptop once, and then Vercel builds and hosts the app.
+About 15 minutes, all on free tiers. Vercel hosts the app and, through its Neon integration, creates the database for you. The first build sets up everything: tables, all ~12,000 US stocks and ETFs, and the demo world. Nothing needs to run on your laptop.
 
-> **Never commit `.env`.** It's already in `.gitignore`. Keys go in your local `.env` and in Vercel's settings, nowhere else.
+> **Never commit `.env`.** It's already in `.gitignore`. Secrets go in Vercel's settings (and your local `.env` if you develop locally), nowhere else.
 
 ---
 
 ## 0. Accounts you need
 
-| Service                                          | What for                                | Required?                            |
-| ------------------------------------------------ | --------------------------------------- | ------------------------------------ |
-| [GitHub](https://github.com)                     | Hosts the code; Vercel deploys from it  | Yes                                  |
-| [Neon](https://neon.tech)                        | Postgres database                       | Yes                                  |
-| [Vercel](https://vercel.com)                     | Hosts the app (sign up **with GitHub**) | Yes                                  |
-| [Finnhub](https://finnhub.io)                    | Real stock prices for all ~12k stocks   | Strongly recommended                 |
-| [Ably](https://ably.com)                         | Instant leaderboard/feed updates        | Optional (falls back to 10s polling) |
-| [Upstash](https://upstash.com)                   | Rate limiting shared across servers     | Optional (falls back to in-memory)   |
-| [Google Cloud](https://console.cloud.google.com) | "Continue with Google" button           | Optional                             |
+| Service                                          | What for                                    | Required?                            |
+| ------------------------------------------------ | ------------------------------------------- | ------------------------------------ |
+| [GitHub](https://github.com)                     | Hosts the code; Vercel deploys from it      | Yes                                  |
+| [Vercel](https://vercel.com)                     | Hosts the app and creates the Neon database | Yes (sign up **with GitHub**)        |
+| [Finnhub](https://finnhub.io)                    | Real stock prices for all ~12k stocks       | Strongly recommended                 |
+| [Ably](https://ably.com)                         | Instant leaderboard/feed updates            | Optional (falls back to 10s polling) |
+| [Upstash](https://upstash.com)                   | Rate limiting shared across servers         | Optional (falls back to in-memory)   |
+| [Google Cloud](https://console.cloud.google.com) | "Continue with Google" button               | Optional                             |
 
-Without a Finnhub key everything still works, but prices come from the built-in simulation. For a real-market app, get the key (it's free).
+Without a Finnhub key everything still works, but prices come from the built-in simulation. For a real-market app, get the key (it's free: sign up at <https://finnhub.io/register>, the key is on your dashboard).
 
 ---
 
@@ -35,83 +34,69 @@ git remote add origin https://github.com/wr7mdmf7h4-cmyk/bullpen.git
 git push -u origin main
 ```
 
-Refresh the GitHub page and your code should be there. The **Actions** tab starts running CI (lint, types, tests) automatically.
-
 ---
 
-## 2. Create the database (Neon)
+## 2. Make two secrets
 
-1. Sign up at <https://neon.tech> and click **New project**. Name it `bullpen` and pick the region closest to you. (Vercel defaults to Washington D.C. (`iad1`), so **AWS US East (N. Virginia)** is a good match.)
-2. On the project dashboard click **Connect**. You need **two** connection strings:
-   - With **Connection pooling ON**: copy it. This is your `DATABASE_URL` (the host contains `-pooler`).
-   - With **Connection pooling OFF**: copy it. This is your `DIRECT_URL`.
-
-Both look like `postgresql://user:password@ep-xxxx.region.aws.neon.tech/neondb?sslmode=require`.
-
----
-
-## 3. Get your keys
-
-**Two random secrets.** Run this twice; one result is `AUTH_SECRET`, the other is `CRON_SECRET`:
+Run this twice in a terminal. The first result is `AUTH_SECRET` (signs logins), the second is `CRON_SECRET` (protects the daily job):
 
 ```bash
 openssl rand -base64 32
 ```
 
-**Finnhub key.** Sign up at <https://finnhub.io/register>; your API key is on the dashboard. That's `FINNHUB_API_KEY`.
+---
+
+## 3. Import the project into Vercel
+
+1. Go to <https://vercel.com/signup> and choose **Continue with GitHub** (the free **Hobby** plan is fine).
+2. On <https://vercel.com/new>, find `bullpen` and click **Import**.
+   If it isn't listed, click **Adjust GitHub App Permissions** and give Vercel access to the repo.
+3. On the **Configure Project** screen, leave the build settings alone (the repo's `vercel.json` handles them). Open **Environment Variables** and add:
+
+   | Key               | Value                          |
+   | ----------------- | ------------------------------ |
+   | `AUTH_SECRET`     | your first secret              |
+   | `CRON_SECRET`     | your second secret             |
+   | `FINNHUB_API_KEY` | your Finnhub key (recommended) |
+
+4. Click **Deploy**. The build succeeds, but the site shows an error until the database is connected. That's expected; the build log says `DATABASE_URL is not set`.
 
 ---
 
-## 4. Load the database from your laptop (once)
+## 4. Create the database (inside Vercel)
 
-1. Open `.env` in the project folder and replace its contents with:
+1. In your Vercel project, open the **Storage** tab → **Create Database** → choose **Neon** → **Continue**.
+2. Accept Neon's terms, pick the **Free** plan and the region **Washington, D.C. (iad1)** (same as Vercel's default), and create it.
+3. When asked, **connect it to the `bullpen` project** for all environments. Vercel adds `DATABASE_URL` and `DATABASE_URL_UNPOOLED` automatically; you never copy a password.
 
-```dotenv
-DATABASE_URL="<pooled Neon URL>"
-DIRECT_URL="<direct Neon URL>"
-AUTH_SECRET="<first secret>"
-CRON_SECRET="<second secret>"
-FINNHUB_API_KEY="<your Finnhub key>"
-```
+---
 
-2. Create the tables:
+## 5. Redeploy and play
 
-```bash
-npm run db:migrate
-```
+1. Go to **Deployments**, open the **⋯** menu on the latest deployment, and choose **Redeploy**.
+2. This build log shows the setup happening: migrations applied, `✅ 11,9xx tradable symbols synced`, `🌱 Seeding Bullpen…`. Later deploys skip the seed and keep everyone's data.
+3. Open your URL (like `bullpen-xyz.vercel.app`), click **Try the demo**, and press <kbd>⌘K</kbd> to search any stock.
+4. Under **Settings → Cron Jobs** you should see `/api/cron/snapshot` running daily (portfolio snapshots + weekly stock-list refresh).
 
-3. Load every US stock and ETF (about 12,000; takes a few seconds):
+From now on, every `git push` to `main` redeploys automatically.
 
-```bash
-npm run instruments:sync
-```
+### Developing locally against the same database (optional)
 
-4. Add the demo world (demo account, 6 bot traders, a private league, 45 days of trades):
+Pull the environment variables Vercel now holds into a local `.env`:
 
 ```bash
-npm run db:seed
+npx vercel env pull .env
 ```
 
-5. Check it locally:
+Then start the app locally:
 
 ```bash
 npm run dev
 ```
 
-Open <http://localhost:3000>, click **Try the demo**, then search for any ticker (for example `BRK.B` or `HOOD`) with <kbd>⌘K</kbd>.
+### Alternative: bring your own Neon project
 
----
-
-## 5. Deploy on Vercel
-
-1. Go to <https://vercel.com/new> and **Import** your `bullpen` repo. Vercel detects Next.js; leave the build settings alone (`vercel.json` already runs migrations and the stock sync before building).
-2. Open **Environment Variables** and add the same five values from step 4:
-   `DATABASE_URL`, `DIRECT_URL`, `AUTH_SECRET`, `CRON_SECRET`, `FINNHUB_API_KEY`.
-3. Click **Deploy** and wait about 2 minutes.
-4. Open the URL Vercel gives you (like `bullpen-xyz.vercel.app`) and click **Try the demo**.
-5. Under **Project → Settings → Cron Jobs** you should see `/api/cron/snapshot` scheduled daily. It records portfolio values and refreshes the stock list weekly.
-
-From now on, every `git push` to `main` redeploys automatically.
+If you'd rather create the database at <https://neon.tech> yourself, add its pooled URL as `DATABASE_URL` and its direct URL as `DIRECT_URL` in Vercel's environment variables, then redeploy. The build does the rest.
 
 ---
 
@@ -171,12 +156,12 @@ Tip: check the **renewal** price, not just the first-year price, and turn on aut
 
 ## Troubleshooting
 
-| Symptom                                              | Fix                                                                                                                       |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Build fails at `prisma migrate deploy`               | `DIRECT_URL` missing or it's the pooled URL. Use the non-pooled one.                                                      |
-| "Invalid environment variables"                      | `DATABASE_URL` or `AUTH_SECRET` isn't set in Vercel.                                                                      |
-| Only ~54 stocks are searchable                       | The stock sync didn't run. Run `npm run instruments:sync` with your Neon URL, or wait for the daily cron.                 |
-| "Market closed" and Buy is disabled                  | The Global League follows real US market hours (9:30–16:00 ET, weekdays). Switch to **24/7 Practice** in the league menu. |
-| "We couldn't get a live price…"                      | Finnhub didn't return a price in time (free tier: 60 calls/min). Wait a minute and retry.                                 |
-| Leaderboard updates every ~10 seconds, not instantly | Expected without Ably. Add `ABLY_API_KEY` for push updates.                                                               |
-| Google button missing                                | Both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` must be set, then redeploy.                                            |
+| Symptom                                              | Fix                                                                                                                           |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Build fails at `prisma migrate deploy`               | If you brought your own Neon project, `DIRECT_URL` must be the non-pooled URL. With the Vercel integration this is automatic. |
+| "Invalid environment variables" / error page         | The database isn't connected yet (step 4) or `AUTH_SECRET` is missing; fix it, then redeploy.                                 |
+| Only ~54 stocks are searchable                       | The stock sync failed during the build (see the log). Redeploy, or wait for the daily cron.                                   |
+| "Market closed" and Buy is disabled                  | The Global League follows real US market hours (9:30–16:00 ET, weekdays). Switch to **24/7 Practice** in the league menu.     |
+| "We couldn't get a live price…"                      | Finnhub didn't return a price in time (free tier: 60 calls/min). Wait a minute and retry.                                     |
+| Leaderboard updates every ~10 seconds, not instantly | Expected without Ably. Add `ABLY_API_KEY` for push updates.                                                                   |
+| Google button missing                                | Both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` must be set, then redeploy.                                                |

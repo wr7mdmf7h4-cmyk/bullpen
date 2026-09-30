@@ -295,10 +295,9 @@ Every variable is documented in [`.env.example`](.env.example).
 
 Full click-by-click guide: **[docs/DEPLOYING.md](docs/DEPLOYING.md)**. The short version:
 
-1. Create a Neon project; copy the pooled connection string (and optionally the direct one).
-2. Import the repo in Vercel. Add `DATABASE_URL`, `AUTH_SECRET` (and any optional variables).
-3. Deploy. `vercel.json` runs `prisma migrate deploy` and the instrument sync before `next build`, and registers the daily cron (snapshots + weekly universe refresh).
-4. From your machine, once: `npm run db:migrate && npm run instruments:sync && npm run db:seed` with your Neon URLs in `.env`.
+1. Import the repo in Vercel and add `AUTH_SECRET`, `CRON_SECRET` (and `FINNHUB_API_KEY`).
+2. In the project's **Storage** tab, create a **Neon** database and connect it (this injects `DATABASE_URL` / `DATABASE_URL_UNPOOLED`).
+3. Redeploy. `scripts/vercel-build.sh` applies migrations, syncs ~12k stocks, seeds the demo world on the first deploy only, then builds. The daily cron takes snapshots and refreshes the stock list weekly.
 
 ---
 

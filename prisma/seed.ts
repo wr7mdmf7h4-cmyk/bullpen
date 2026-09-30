@@ -11,7 +11,8 @@
  * Idempotent: re-running wipes and recreates only seeded users and the demo
  * league. Real users are never touched.
  *
- *   npm run db:seed
+ *   npm run db:seed              # (re)create the demo world
+ *   tsx prisma/seed.ts --if-empty  # only if it doesn't exist yet (used by the Vercel build)
  */
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -33,7 +34,12 @@ import {
 } from "../src/domain/leagues";
 import { ratioBps } from "../src/domain/money";
 
-const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }) });
+const db = new PrismaClient({
+  adapter: new PrismaPg({
+    connectionString: process.env.DIRECT_URL || process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL!,
+  }),
+});
+const IF_EMPTY = process.argv.includes("--if-empty");
 
 const DAY = 86_400_000;
 const BOT_DOMAIN = "bots.bullpen.dev";
@@ -165,6 +171,10 @@ function candidateSymbols(persona: Persona): InstrumentDef[] {
 
 async function main() {
   const now = new Date();
+  if (IF_EMPTY && (await db.user.findUnique({ where: { email: DEMO_EMAIL }, select: { id: true } }))) {
+    console.log("🌱 Demo world already exists, skipping seed (--if-empty)");
+    return;
+  }
   console.log("🌱 Seeding Bullpen…");
 
   // ── reference data ───────────────────────────────────────────────────────
