@@ -1,7 +1,12 @@
 import { formatCents } from "@/domain/money";
 import type { KeyStats as KeyStatsData } from "@/server/market";
 
-const compactUsd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 2 });
+const compactUsd = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  notation: "compact",
+  maximumFractionDigits: 2,
+});
 
 function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -27,7 +32,9 @@ export function KeyStats({ stats, sector, exchange }: { stats: KeyStatsData; sec
         <Stat label="Day low" value={cents(stats.lowCents)} />
         <Stat label="52-week high" value={cents(stats.yearHighCents)} />
         <Stat label="52-week low" value={cents(stats.yearLowCents)} />
-        {stats.marketCapDollars !== null && <Stat label="Market cap" value={compactUsd.format(stats.marketCapDollars)} />}
+        {stats.marketCapDollars !== null && (
+          <Stat label="Market cap" value={compactUsd.format(stats.marketCapDollars)} />
+        )}
         {stats.peRatio !== null && <Stat label="P/E ratio" value={stats.peRatio.toFixed(2)} />}
         <Stat label="Sector" value={sector} />
         <Stat label="Exchange" value={exchange} />

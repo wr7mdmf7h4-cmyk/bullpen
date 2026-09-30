@@ -10,13 +10,15 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:integration": "vitest run --config vitest.integration.config.mts",
     "test:e2e": "playwright test",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
     "db:seed": "prisma db seed",
-    "db:reset": "prisma migrate reset --force"
+    "db:reset": "prisma migrate reset --force",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@dicebear/bottts-neutral": "^9.4.2",
@@ -59,6 +61,8 @@
     "dotenv": "^18.0.4",
     "eslint": "^9",
     "eslint-config-next": "16.3.7",
+    "prettier": "^3.9.9",
+    "prettier-plugin-tailwindcss": "^0.8.1",
     "prisma": "^7.10.0",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",

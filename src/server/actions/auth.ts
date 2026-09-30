@@ -81,20 +81,22 @@ export async function logOutAction() {
   await signOut({ redirectTo: "/" });
 }
 
-export async function chooseUsernameAction(
-  _prev: ActionResult | undefined,
-  formData: FormData,
-): Promise<ActionResult> {
+export async function chooseUsernameAction(_prev: ActionResult | undefined, formData: FormData): Promise<ActionResult> {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (user.username) redirect("/dashboard");
 
   const parsed = usernameSchema.safeParse(formData.get("username"));
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]!.message, fieldErrors: { username: [parsed.error.issues[0]!.message] } };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]!.message,
+      fieldErrors: { username: [parsed.error.issues[0]!.message] },
+    };
   }
   const taken = await db.user.findUnique({ where: { username: parsed.data }, select: { id: true } });
-  if (taken) return { ok: false, error: "That username is taken", fieldErrors: { username: ["That username is taken"] } };
+  if (taken)
+    return { ok: false, error: "That username is taken", fieldErrors: { username: ["That username is taken"] } };
 
   await db.user.update({ where: { id: user.id }, data: { username: parsed.data } });
   redirect("/dashboard?welcome=1");

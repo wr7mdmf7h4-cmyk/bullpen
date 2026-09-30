@@ -51,7 +51,10 @@ export function StockSearch() {
           if (!o) setQuery("");
         }}
       >
-        <DialogContent showCloseButton={false} className="top-[15%] translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-lg">
+        <DialogContent
+          showCloseButton={false}
+          className="top-[15%] translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-lg"
+        >
           <DialogTitle className="sr-only">Search stocks</DialogTitle>
           <div className="flex items-center gap-2 border-b px-4">
             <Search className="size-4 text-muted-foreground" />
@@ -87,7 +90,10 @@ export function StockSearch() {
                 <button
                   onMouseEnter={() => setCursor(i)}
                   onClick={() => go(r.symbol)}
-                  className={cn("flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left", i === cursor && "bg-accent")}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left",
+                    i === cursor && "bg-accent",
+                  )}
                 >
                   <TickerBadge symbol={r.symbol} className="size-8 text-[10px]" />
                   <span className="min-w-0 flex-1">

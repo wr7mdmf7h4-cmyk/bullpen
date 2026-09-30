@@ -8,9 +8,7 @@ export function calendarFor(source: MarketSourceKind): MarketCalendar {
 }
 
 export type MarketStatus =
-  | { state: "ALWAYS_OPEN" }
-  | { state: "OPEN"; closesAt: Date }
-  | { state: "CLOSED"; opensAt: Date };
+  { state: "ALWAYS_OPEN" } | { state: "OPEN"; closesAt: Date } | { state: "CLOSED"; opensAt: Date };
 
 export function marketStatus(source: MarketSourceKind, now: Date): MarketStatus {
   if (source === "SIMULATED") return { state: "ALWAYS_OPEN" };

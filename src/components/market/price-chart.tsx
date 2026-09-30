@@ -159,9 +159,13 @@ export function PriceChart({
         ) : (
           <div className="grid h-full place-content-center text-sm text-muted-foreground">Not enough data yet.</div>
         )}
-        {loading && <div className="absolute inset-0 animate-pulse rounded-xl bg-background/40" aria-label="Loading chart" />}
+        {loading && (
+          <div className="absolute inset-0 animate-pulse rounded-xl bg-background/40" aria-label="Loading chart" />
+        )}
         {error && (
-          <div className="absolute inset-0 grid place-content-center text-sm text-loss">Couldn&apos;t load this range.</div>
+          <div className="absolute inset-0 grid place-content-center text-sm text-loss">
+            Couldn&apos;t load this range.
+          </div>
         )}
       </div>
 

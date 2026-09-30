@@ -7,7 +7,10 @@ export function TickerBadge({ symbol, className }: { symbol: string; className?:
   return (
     <span
       aria-hidden
-      className={cn("grid size-10 shrink-0 place-content-center rounded-xl font-mono text-[11px] font-bold tracking-tight", className)}
+      className={cn(
+        "grid size-10 shrink-0 place-content-center rounded-xl font-mono text-[11px] font-bold tracking-tight",
+        className,
+      )}
       style={{
         background: `oklch(0.3 0.06 ${hue})`,
         color: `oklch(0.9 0.1 ${hue})`,

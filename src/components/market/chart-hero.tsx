@@ -15,8 +15,7 @@ const RANGE_LABEL: Record<ChartRange, string> = {
 };
 
 export type ChartSource =
-  | { type: "stock"; symbol: string; source: "LIVE" | "SIMULATED" }
-  | { type: "portfolio"; portfolioId: string };
+  { type: "stock"; symbol: string; source: "LIVE" | "SIMULATED" } | { type: "portfolio"; portfolioId: string };
 
 function historyUrl(src: ChartSource, range: ChartRange) {
   return src.type === "stock"

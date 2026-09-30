@@ -63,7 +63,10 @@ export function formatCents(cents: Cents, opts: { sign?: boolean; compact?: bool
   const abs = Math.abs(cents);
   const whole = Math.trunc(abs / 100);
   const frac = abs % 100;
-  const body = opts.compact && abs >= 1_000_000 ? usdCompact.format(abs / 100) : usd.format(whole).replace(/\.00$/, "") + "." + String(frac).padStart(2, "0");
+  const body =
+    opts.compact && abs >= 1_000_000
+      ? usdCompact.format(abs / 100)
+      : usd.format(whole).replace(/\.00$/, "") + "." + String(frac).padStart(2, "0");
   if (negative) return `-${body}`;
   return opts.sign && cents > 0 ? `+${body}` : body;
 }

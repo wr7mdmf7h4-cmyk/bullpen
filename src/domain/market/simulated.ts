@@ -186,7 +186,9 @@ export function simulatedHistory(
   const step = range === "1W" ? 30 * 60_000 : 2 * 3_600_000;
   return sampleRange(
     def,
-    sessions.map((s) => ({ from: s.open.getTime(), to: Math.min(s.close.getTime(), end), stepMs: step })).filter((w) => w.to > w.from),
+    sessions
+      .map((s) => ({ from: s.open.getTime(), to: Math.min(s.close.getTime(), end), stepMs: step }))
+      .filter((w) => w.to > w.from),
   );
 }
 

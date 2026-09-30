@@ -30,5 +30,9 @@ export const getActivePortfolio = cache(async (userId: string) => {
     portfolios = await db.portfolio.findMany({ where: { userId }, include: { league: true } });
   }
   const wanted = (await cookies()).get(ACTIVE_LEAGUE_COOKIE)?.value ?? SYSTEM_LEAGUES.global.id;
-  return portfolios.find((p) => p.leagueId === wanted) ?? portfolios.find((p) => p.leagueId === SYSTEM_LEAGUES.global.id) ?? portfolios[0]!;
+  return (
+    portfolios.find((p) => p.leagueId === wanted) ??
+    portfolios.find((p) => p.leagueId === SYSTEM_LEAGUES.global.id) ??
+    portfolios[0]!
+  );
 });

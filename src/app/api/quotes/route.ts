@@ -9,7 +9,12 @@ const querySchema = z.object({
   source: z.enum(["LIVE", "SIMULATED"]),
   symbols: z
     .string()
-    .transform((s) => s.split(",").map((x) => x.trim().toUpperCase()).filter(Boolean))
+    .transform((s) =>
+      s
+        .split(",")
+        .map((x) => x.trim().toUpperCase())
+        .filter(Boolean),
+    )
     .pipe(z.array(z.string().refine(isKnownSymbol, "Unknown symbol")).min(1).max(60)),
 });
 

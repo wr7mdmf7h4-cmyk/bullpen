@@ -15,10 +15,7 @@ export const usernameSchema = z
 
 export const emailSchema = z.string().trim().toLowerCase().pipe(z.email("Enter a valid email").max(254));
 
-export const passwordSchema = z
-  .string()
-  .min(8, "At least 8 characters")
-  .max(128, "At most 128 characters");
+export const passwordSchema = z.string().min(8, "At least 8 characters").max(128, "At most 128 characters");
 
 export const signUpSchema = z.object({
   email: emailSchema,
@@ -41,7 +38,11 @@ export const tradeSchema = z.object({
   leagueId: z.string().min(1).max(40),
   symbol: tickerSchema,
   side: z.enum(["BUY", "SELL"]),
-  quantity: z.coerce.number().int("Whole shares only").min(1, "At least 1 share").max(100_000, "Max 100,000 shares per order"),
+  quantity: z.coerce
+    .number()
+    .int("Whole shares only")
+    .min(1, "At least 1 share")
+    .max(100_000, "Max 100,000 shares per order"),
   /** price the user saw when confirming; used as a slippage guard */
   expectedPriceCents: z.coerce.number().int().positive(),
   idempotencyKey: z.uuid(),

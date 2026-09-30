@@ -6,9 +6,7 @@ import { formatDuration } from "@/domain/leagues";
 import { cn } from "@/lib/utils";
 
 export type MarketStatusDTO =
-  | { state: "ALWAYS_OPEN" }
-  | { state: "OPEN"; closesAt: number }
-  | { state: "CLOSED"; opensAt: number };
+  { state: "ALWAYS_OPEN" } | { state: "OPEN"; closesAt: number } | { state: "CLOSED"; opensAt: number };
 
 function useNow(intervalMs: number) {
   const [now, setNow] = useState(() => Date.now());
@@ -46,7 +44,12 @@ export function MarketStatusPill({
       </span>
     );
   }
-  const label = status.state === "ALWAYS_OPEN" ? "Simulated · 24/7" : realQuotes ? "Market open · live" : "Market open · simulated prices";
+  const label =
+    status.state === "ALWAYS_OPEN"
+      ? "Simulated · 24/7"
+      : realQuotes
+        ? "Market open · live"
+        : "Market open · simulated prices";
   return (
     <span className={cn(base, "border-primary/25 bg-primary/5 text-foreground", className)}>
       <span className="relative flex size-1.5">

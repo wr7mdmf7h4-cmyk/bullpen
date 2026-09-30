@@ -2,12 +2,7 @@ import "server-only";
 import { db } from "../db";
 import { env } from "../env";
 import { getInstrument, UNIVERSE, type InstrumentDef } from "@/domain/market/universe";
-import {
-  simulatedHistory,
-  simulatedPriceCents,
-  simulatedQuote,
-  simulatedYearRange,
-} from "@/domain/market/simulated";
+import { simulatedHistory, simulatedPriceCents, simulatedQuote, simulatedYearRange } from "@/domain/market/simulated";
 import { calendarFor } from "@/domain/market/status";
 import { isMarketOpen } from "@/domain/market/hours";
 import type { ChartRange, PricePoint, Quote } from "@/domain/market/types";

@@ -83,7 +83,7 @@ export function MarketsTable({
               className="h-11 rounded-xl pl-10"
             />
           </div>
-          <div className="scrollbar-none -mx-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:px-0">
+          <div className="-mx-4 flex scrollbar-none gap-2 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:px-0">
             {[null, ...sectors].map((s) => (
               <button
                 key={s ?? "all"}
@@ -103,7 +103,9 @@ export function MarketsTable({
         {visible.length === 0 ? (
           <div className="surface grid place-content-center gap-1 p-10 text-center">
             <p className="font-medium">No stocks match “{query}”</p>
-            <p className="text-sm text-muted-foreground">Bullpen trades a curated list of ~50 popular US stocks and ETFs.</p>
+            <p className="text-sm text-muted-foreground">
+              Bullpen trades a curated list of ~50 popular US stocks and ETFs.
+            </p>
           </div>
         ) : (
           <ul className="surface divide-y overflow-hidden">

@@ -11,7 +11,14 @@ export function useLiveQuotes(initial: QuoteDTO[], source: "LIVE" | "SIMULATED",
   const [quotes, setQuotes] = useState<Record<string, QuoteDTO>>(() =>
     Object.fromEntries(initial.map((q) => [q.symbol, q])),
   );
-  const symbols = useMemo(() => initial.map((q) => q.symbol).sort().join(","), [initial]);
+  const symbols = useMemo(
+    () =>
+      initial
+        .map((q) => q.symbol)
+        .sort()
+        .join(","),
+    [initial],
+  );
   const intervalMs = source === "SIMULATED" ? 5_000 : 15_000;
 
   useEffect(() => {

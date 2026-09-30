@@ -50,8 +50,7 @@ const quoteSchema = z.object({
 });
 
 /** Dollars (float from the wire) → integer cents, exactly once, at the boundary. */
-const toCents = (dollars: number | null | undefined) =>
-  dollars && dollars > 0 ? Math.round(dollars * 100) : null;
+const toCents = (dollars: number | null | undefined) => (dollars && dollars > 0 ? Math.round(dollars * 100) : null);
 
 export async function fetchQuote(symbol: string, apiKey: string): Promise<Quote> {
   const data = quoteSchema.parse(await get(`/quote?symbol=${encodeURIComponent(symbol)}`, apiKey));
@@ -95,7 +94,9 @@ export type FundamentalMetrics = {
 };
 
 export async function fetchMetrics(symbol: string, apiKey: string): Promise<FundamentalMetrics> {
-  const { metric } = metricSchema.parse(await get(`/stock/metric?symbol=${encodeURIComponent(symbol)}&metric=all`, apiKey));
+  const { metric } = metricSchema.parse(
+    await get(`/stock/metric?symbol=${encodeURIComponent(symbol)}&metric=all`, apiKey),
+  );
   return {
     yearHighCents: toCents(metric["52WeekHigh"]),
     yearLowCents: toCents(metric["52WeekLow"]),

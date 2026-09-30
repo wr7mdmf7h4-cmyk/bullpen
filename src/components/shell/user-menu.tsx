@@ -16,7 +16,10 @@ import { logOutAction } from "@/server/actions/auth";
 export function UserMenu({ username, avatarSeed, isDemo }: { username: string; avatarSeed: string; isDemo: boolean }) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring" aria-label="Account menu">
+      <DropdownMenuTrigger
+        className="rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring"
+        aria-label="Account menu"
+      >
         <UserAvatar seed={avatarSeed} name={username} className="size-8" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
