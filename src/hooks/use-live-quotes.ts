@@ -5,7 +5,7 @@ import type { QuoteDTO } from "@/lib/serialize";
 
 /**
  * Keeps a set of quotes fresh by polling /api/quotes. Pauses while the tab is
- * hidden. Simulated prices tick every 5s; live quotes are cached ~15s upstream.
+ * hidden. Simulated prices tick every 5s; live quotes are cached ~60s upstream.
  */
 function toRecord(list: QuoteDTO[]) {
   return Object.fromEntries(list.map((q) => [q.symbol, q]));
@@ -29,7 +29,7 @@ export function useLiveQuotes(initial: QuoteDTO[], source: "LIVE" | "SIMULATED",
         .join(","),
     [initial],
   );
-  const intervalMs = source === "SIMULATED" ? 5_000 : 15_000;
+  const intervalMs = source === "SIMULATED" ? 5_000 : 30_000; // live quotes are cached ~60s upstream
 
   useEffect(() => {
     if (!enabled || !symbols) return;

@@ -34,9 +34,9 @@ export default async function StockPage({ params }: PageProps<"/stocks/[symbol]"
   const portfolio = await getActivePortfolio(user.id);
   const source = portfolio.league.marketSource;
   const now = new Date();
-  const [quote, history, stats, holding, trades] = await Promise.all([
-    getQuote(def.symbol, source, now),
-    getHistory(def.symbol, source, "1D", now),
+  const quote = await getQuote(def.symbol, source, now);
+  const [history, stats, holding, trades] = await Promise.all([
+    getHistory(def.symbol, source, "1D", now, quote),
     getKeyStats(def.symbol, source, now),
     db.holding.findUnique({ where: { portfolioId_symbol: { portfolioId: portfolio.id, symbol: def.symbol } } }),
     db.trade.findMany({

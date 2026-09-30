@@ -36,7 +36,7 @@ export async function valuePortfolios<T extends PortfolioWithHoldings>(
   }
   const prices = new Map<MarketSourceKind, Map<string, number>>();
   for (const [source, symbols] of bySource) {
-    const quotes = symbols.size ? await getQuotes([...symbols], source, { now, maxFetch: 60 }) : new Map();
+    const quotes = symbols.size ? await getQuotes([...symbols], source, { now, maxFetch: 20 }) : new Map();
     prices.set(source, new Map([...quotes.values()].map((q) => [q.symbol, q.priceCents])));
   }
   return new Map(
@@ -131,8 +131,13 @@ export async function getPortfolioHistory(
 
   // Exact reconstruction since the last trade.
   if (detail.holdings.length) {
+    const anchors = await getQuotes(
+      detail.holdings.map((h) => h.symbol),
+      detail.league.marketSource,
+      { now },
+    );
     const series = await Promise.all(
-      detail.holdings.map((h) => getHistory(h.symbol, detail.league.marketSource, range, now)),
+      detail.holdings.map((h) => getHistory(h.symbol, detail.league.marketSource, range, now, anchors.get(h.symbol))),
     );
     const timeline = series[0]!.points;
     const aligned = series.every((s) => s.points.length === timeline.length);

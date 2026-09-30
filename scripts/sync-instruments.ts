@@ -10,6 +10,7 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { syncInstruments } from "../src/lib/instrument-sync";
+import { withExplicitSslMode } from "../src/lib/database-url";
 
 const url =
   process.env.DIRECT_URL ||
@@ -17,7 +18,7 @@ const url =
   process.env.POSTGRES_URL_NON_POOLING ||
   process.env.DATABASE_URL;
 if (!url) throw new Error("Set DATABASE_URL (or DIRECT_URL) first");
-const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
+const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: withExplicitSslMode(url) }) });
 
 const started = Date.now();
 syncInstruments(db, { log: (m) => console.log(`  ${m}`) })

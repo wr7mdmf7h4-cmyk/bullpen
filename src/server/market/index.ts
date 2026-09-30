@@ -8,7 +8,7 @@ import { calendarFor } from "@/domain/market/status";
 import { isMarketOpen } from "@/domain/market/hours";
 import type { ChartRange, PricePoint, Quote } from "@/domain/market/types";
 import type { MarketSourceKind } from "@/domain/leagues";
-import { fetchMetrics, fetchQuote, type FundamentalMetrics } from "./finnhub";
+import { fetchMetrics, fetchQuote, type FundamentalMetrics, type Priority } from "./finnhub";
 
 /**
  * Market data facade. Callers ask for quotes "for a league's market source";
@@ -52,8 +52,9 @@ export function usesRealQuotes(source: MarketSourceKind) {
 const memory = new Map<string, Quote & { cachedAt: number }>();
 
 function ttlMs(now: Date) {
-  // Prices don't move while the market is closed, so cache much longer.
-  return isMarketOpen(now) ? 15_000 : 10 * 60_000;
+  // 60s keeps the free tier (60 calls/min) viable; prices don't move while
+  // the market is closed, so cache much longer then.
+  return isMarketOpen(now) ? 60_000 : 10 * 60_000;
 }
 
 async function liveQuotes(
@@ -61,6 +62,7 @@ async function liveQuotes(
   defs: Map<string, InstrumentDef>,
   now: Date,
   maxFetch: number,
+  priority: Priority,
 ): Promise<Map<string, Quote>> {
   const key = liveKey()!;
   const ttl = ttlMs(now);
@@ -102,7 +104,7 @@ async function liveQuotes(
 
   // 3. Finnhub, bounded per request to respect the free-tier rate limit
   const toFetch = missing.slice(0, maxFetch);
-  const fetched = await Promise.allSettled(toFetch.map((s) => fetchQuote(s, key)));
+  const fetched = await Promise.allSettled(toFetch.map((s) => fetchQuote(s, key, priority)));
   const writes: Promise<unknown>[] = [];
   fetched.forEach((result, i) => {
     const symbol = toFetch[i]!;
@@ -131,18 +133,23 @@ async function liveQuotes(
 export async function getQuotes(
   symbols: string[],
   source: MarketSourceKind,
-  opts: { now?: Date; maxFetch?: number } = {},
+  opts: { now?: Date; maxFetch?: number; priority?: Priority } = {},
 ): Promise<Map<string, Quote>> {
   const now = opts.now ?? new Date();
   const unique = [...new Set(symbols.map((s) => s.toUpperCase()))];
   const defs = await requireInstruments(unique);
-  if (usesRealQuotes(source)) return liveQuotes(unique, defs, now, opts.maxFetch ?? 25);
+  if (usesRealQuotes(source)) {
+    // Bulk callers refresh a few stale symbols per request; the rest are
+    // served from cache and catch up on the next request.
+    return liveQuotes(unique, defs, now, opts.maxFetch ?? 10, opts.priority ?? "bulk");
+  }
   const calendar = calendarFor(source);
   return new Map(unique.map((s) => [s, simulatedQuote(defs.get(s)!, calendar, now)]));
 }
 
+/** One symbol at high priority: the stock page and order execution use this. */
 export async function getQuote(symbol: string, source: MarketSourceKind, now = new Date()): Promise<Quote> {
-  const quotes = await getQuotes([symbol], source, { now, maxFetch: 1 });
+  const quotes = await getQuotes([symbol], source, { now, maxFetch: 1, priority: "high" });
   return quotes.get(symbol.toUpperCase())!;
 }
 
@@ -161,20 +168,22 @@ export type History = { points: PricePoint[]; illustrative: boolean };
 /**
  * Chart history. With real quotes the *shape* comes from the simulation (free
  * Finnhub has no candles) but is anchored so it ends exactly at the live price;
- * the UI labels these charts as illustrative.
+ * the UI labels these charts as illustrative. Pass `anchor` when you already
+ * have the quote, to avoid spending another API call on it.
  */
 export async function getHistory(
   symbol: string,
   source: MarketSourceKind,
   range: ChartRange,
   now = new Date(),
+  anchor?: Quote,
 ): Promise<History> {
   const def = await requireInstrument(symbol);
   const calendar = calendarFor(source);
   const points = simulatedHistory(def, calendar, range, now);
   if (!usesRealQuotes(source)) return { points, illustrative: false };
 
-  const live = await getQuote(symbol, source, now);
+  const live = anchor ?? (await getQuote(symbol, source, now));
   if (live.source === "simulated") return { points, illustrative: false };
   const last = points[points.length - 1]!;
   const factor = live.priceCents / simulatedPriceCents(def, last.t);

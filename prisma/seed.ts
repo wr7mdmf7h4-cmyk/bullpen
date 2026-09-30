@@ -33,10 +33,13 @@ import {
   SYSTEM_LEAGUE_START,
 } from "../src/domain/leagues";
 import { ratioBps } from "../src/domain/money";
+import { withExplicitSslMode } from "../src/lib/database-url";
 
 const db = new PrismaClient({
   adapter: new PrismaPg({
-    connectionString: process.env.DIRECT_URL || process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL!,
+    connectionString: withExplicitSslMode(
+      process.env.DIRECT_URL || process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL!,
+    ),
   }),
 });
 const IF_EMPTY = process.argv.includes("--if-empty");

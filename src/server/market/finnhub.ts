@@ -11,31 +11,44 @@ import type { Quote } from "@/domain/market/types";
 const BASE = "https://finnhub.io/api/v1";
 const TIMEOUT_MS = 4_000;
 
-// Stay safely under the 60/min free-tier limit, per server instance.
-const CALLS_PER_MINUTE = 50;
+/**
+ * Call budget, per server instance, inside the free tier's 60 calls/min:
+ * - "high" priority (the stock you're looking at, the order you're placing)
+ *   may use the whole budget;
+ * - "bulk" refreshes (lists, leaderboards, background enrichment) stop at a
+ *   lower ceiling so they can never starve a trade of a fresh price.
+ * After a 429 we back off entirely for a short cooldown.
+ */
+export type Priority = "high" | "bulk";
+
+const LIMITS: Record<Priority, number> = { high: 50, bulk: 30 };
+const COOLDOWN_MS = 30_000;
 let windowStart = 0;
 let callsInWindow = 0;
+let cooldownUntil = 0;
 
-function takeToken(): boolean {
+function takeToken(priority: Priority): boolean {
   const now = Date.now();
+  if (now < cooldownUntil) return false;
   if (now - windowStart >= 60_000) {
     windowStart = now;
     callsInWindow = 0;
   }
-  if (callsInWindow >= CALLS_PER_MINUTE) return false;
+  if (callsInWindow >= LIMITS[priority]) return false;
   callsInWindow += 1;
   return true;
 }
 
 export class FinnhubUnavailable extends Error {}
 
-async function get(path: string, apiKey: string): Promise<unknown> {
-  if (!takeToken()) throw new FinnhubUnavailable("local Finnhub budget exhausted");
+async function get(path: string, apiKey: string, priority: Priority): Promise<unknown> {
+  if (!takeToken(priority)) throw new FinnhubUnavailable(`local Finnhub budget exhausted (${priority})`);
   const res = await fetch(`${BASE}${path}`, {
     headers: { "X-Finnhub-Token": apiKey },
     signal: AbortSignal.timeout(TIMEOUT_MS),
     cache: "no-store",
   });
+  if (res.status === 429) cooldownUntil = Date.now() + COOLDOWN_MS;
   if (!res.ok) throw new FinnhubUnavailable(`Finnhub ${path} → HTTP ${res.status}`);
   return res.json();
 }
@@ -52,8 +65,8 @@ const quoteSchema = z.object({
 /** Dollars (float from the wire) → integer cents, exactly once, at the boundary. */
 const toCents = (dollars: number | null | undefined) => (dollars && dollars > 0 ? Math.round(dollars * 100) : null);
 
-export async function fetchQuote(symbol: string, apiKey: string): Promise<Quote> {
-  const data = quoteSchema.parse(await get(`/quote?symbol=${encodeURIComponent(symbol)}`, apiKey));
+export async function fetchQuote(symbol: string, apiKey: string, priority: Priority): Promise<Quote> {
+  const data = quoteSchema.parse(await get(`/quote?symbol=${encodeURIComponent(symbol)}`, apiKey, priority));
   const price = toCents(data.c);
   const prev = toCents(data.pc);
   if (!price || !prev) throw new FinnhubUnavailable(`No quote for ${symbol}`);
@@ -95,7 +108,7 @@ export type FundamentalMetrics = {
 
 export async function fetchMetrics(symbol: string, apiKey: string): Promise<FundamentalMetrics> {
   const { metric } = metricSchema.parse(
-    await get(`/stock/metric?symbol=${encodeURIComponent(symbol)}&metric=all`, apiKey),
+    await get(`/stock/metric?symbol=${encodeURIComponent(symbol)}&metric=all`, apiKey, "bulk"),
   );
   return {
     yearHighCents: toCents(metric["52WeekHigh"]),
@@ -114,6 +127,6 @@ export async function fetchProfile(
   symbol: string,
   apiKey: string,
 ): Promise<{ industry: string | null; name: string | null }> {
-  const p = profileSchema.parse(await get(`/stock/profile2?symbol=${encodeURIComponent(symbol)}`, apiKey));
+  const p = profileSchema.parse(await get(`/stock/profile2?symbol=${encodeURIComponent(symbol)}`, apiKey, "bulk"));
   return { industry: p.finnhubIndustry ?? null, name: p.name ?? null };
 }

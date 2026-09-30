@@ -30,7 +30,7 @@ export default async function MarketsPage() {
   ]);
   const rows: MarketRow[] = await Promise.all(
     popular.map(async (def) => {
-      const history = await getHistory(def.symbol, source, "1D", now);
+      const history = await getHistory(def.symbol, source, "1D", now, quotes.get(def.symbol));
       return {
         symbol: def.symbol,
         name: def.name,
