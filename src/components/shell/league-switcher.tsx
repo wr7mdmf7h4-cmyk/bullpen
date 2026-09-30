@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
-import { Check, ChevronsUpDown, Globe, Loader2, Timer, Users } from "lucide-react";
+import { Check, ChevronsUpDown, Globe, Loader2, Users } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,15 +15,10 @@ import { toast } from "sonner";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
-export type SwitcherLeague = {
-  id: string;
-  name: string;
-  kind: "GLOBAL" | "PRACTICE" | "PRIVATE";
-  marketSource: "LIVE" | "SIMULATED";
-};
+export type SwitcherLeague = { id: string; name: string; kind: "GLOBAL" | "PRIVATE" };
 
 function LeagueIcon({ kind, className }: { kind: SwitcherLeague["kind"]; className?: string }) {
-  const Icon = kind === "GLOBAL" ? Globe : kind === "PRACTICE" ? Timer : Users;
+  const Icon = kind === "GLOBAL" ? Globe : Users;
   return <Icon className={cn("size-4", className)} />;
 }
 
@@ -57,9 +52,6 @@ export function LeagueSwitcher({ leagues, activeId }: { leagues: SwitcherLeague[
           <DropdownMenuItem key={l.id} onSelect={() => choose(l.id)} className="gap-2">
             <LeagueIcon kind={l.kind} className="text-muted-foreground" />
             <span className="flex-1 truncate">{l.name}</span>
-            <span className="text-[10px] text-muted-foreground uppercase">
-              {l.marketSource === "LIVE" ? "Live" : "24/7"}
-            </span>
             {l.id === active.id && <Check className="size-4 text-primary" />}
           </DropdownMenuItem>
         ))}

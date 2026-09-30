@@ -13,7 +13,7 @@ import {
 import { UserAvatar } from "@/components/user-avatar";
 import { logOutAction } from "@/server/actions/auth";
 
-export function UserMenu({ username, avatarSeed, isDemo }: { username: string; avatarSeed: string; isDemo: boolean }) {
+export function UserMenu({ username, avatarSeed }: { username: string; avatarSeed: string }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -25,7 +25,6 @@ export function UserMenu({ username, avatarSeed, isDemo }: { username: string; a
       <DropdownMenuContent align="end" className="w-52">
         <DropdownMenuLabel className="font-normal">
           <div className="font-medium text-foreground">@{username}</div>
-          {isDemo && <div className="text-xs text-muted-foreground">Shared demo account</div>}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>

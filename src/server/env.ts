@@ -24,6 +24,8 @@ const schema = z.object({
   UPSTASH_REDIS_REST_URL: optional,
   UPSTASH_REDIS_REST_TOKEN: optional,
   CRON_SECRET: optional,
+  /** "1" = deterministic fake prices for local development/tests. Ignored in production. */
+  FAKE_MARKET_DATA: optional,
 });
 
 export type Env = z.infer<typeof schema>;
@@ -47,6 +49,7 @@ export function features() {
   return {
     google: Boolean(e.GOOGLE_CLIENT_ID && e.GOOGLE_CLIENT_SECRET),
     liveQuotes: Boolean(e.FINNHUB_API_KEY),
+    fakeMarketData: !e.FINNHUB_API_KEY && e.FAKE_MARKET_DATA === "1" && e.NODE_ENV !== "production",
     realtime: e.ABLY_API_KEY ? ("ably" as const) : ("polling" as const),
     distributedRateLimit: Boolean(e.UPSTASH_REDIS_REST_URL && e.UPSTASH_REDIS_REST_TOKEN),
   };

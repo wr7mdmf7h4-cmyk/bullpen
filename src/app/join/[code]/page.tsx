@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Logo } from "@/components/brand/logo";
 import { JoinButton } from "@/components/league/join-button";
-import { LeagueStatusBadge, MarketSourceBadge } from "@/components/league/league-status";
+import { LeagueStatusBadge } from "@/components/league/league-status";
 import { describeFees } from "@/domain/fees";
 import { formatCents } from "@/domain/money";
 import { inviteCodeSchema } from "@/lib/validators";
@@ -52,7 +52,6 @@ export default async function JoinPage({ params }: PageProps<"/join/[code]">) {
           <h1 className="text-2xl font-semibold">{league.name}</h1>
         </div>
         <div className="flex flex-wrap justify-center gap-1.5">
-          <MarketSourceBadge source={league.marketSource} />
           <LeagueStatusBadge league={league} now={now} />
         </div>
         <dl className="grid grid-cols-3 gap-2 text-sm">

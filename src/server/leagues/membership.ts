@@ -55,9 +55,8 @@ export async function joinLeague(userId: string, leagueId: string) {
   }
 }
 
-/** Every user plays in the Global and 24/7 Practice leagues. */
+/** Every user plays in the Global league. */
 export async function joinSystemLeagues(userId: string) {
   await ensureReferenceData();
   await joinLeague(userId, SYSTEM_LEAGUES.global.id);
-  await joinLeague(userId, SYSTEM_LEAGUES.practice.id);
 }

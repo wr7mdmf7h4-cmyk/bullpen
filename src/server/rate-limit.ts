@@ -18,7 +18,6 @@ export const RATE_LIMITS = {
   trade: { limit: 10, windowSeconds: 10 },
   auth: { limit: 10, windowSeconds: 60 },
   signup: { limit: 5, windowSeconds: 600 },
-  demo: { limit: 20, windowSeconds: 60 },
   leagueWrite: { limit: 10, windowSeconds: 600 },
 } satisfies Record<string, Rule>;
 

@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/server/db";
 import { executeTrade, TradeError } from "@/server/trading/execute";
+import { leaveLeague, LeaveError } from "@/server/leagues/service";
 import { getQuote } from "@/server/market";
 import { invalidateInstruments } from "@/server/instruments";
 import { quoteOrder } from "@/domain/trading";
@@ -10,6 +11,7 @@ import { quoteOrder } from "@/domain/trading";
  * row locking, idempotency and CHECK constraints.
  */
 
+// Monday 11:00 ET: the US market is open.
 const NOW = new Date("2026-06-15T15:00:00Z");
 const SYMBOL = "AAPL";
 
@@ -31,7 +33,6 @@ async function createPlayer(startingCashCents: number) {
     data: {
       name: "Test league",
       kind: "PRIVATE",
-      marketSource: "SIMULATED", // always open, deterministic prices
       inviteCode: `T${Math.floor(Math.random() * 1e8)}`,
       startsAt: new Date("2026-01-01"),
       endsAt: null,
@@ -52,7 +53,7 @@ describe("trading engine (integration)", () => {
   });
 
   it("never lets simultaneous buys overspend", async () => {
-    const price = (await getQuote(SYMBOL, "SIMULATED", NOW)).priceCents;
+    const price = (await getQuote(SYMBOL, NOW)).priceCents;
     const fees = { flatCents: 100, bps: 10 };
     const quantity = 3;
     const orderCost = quoteOrder("BUY", quantity, price, fees).totalCents;
@@ -97,7 +98,7 @@ describe("trading engine (integration)", () => {
   });
 
   it("treats a double-submitted order (same idempotency key) as one trade", async () => {
-    const price = (await getQuote(SYMBOL, "SIMULATED", NOW)).priceCents;
+    const price = (await getQuote(SYMBOL, NOW)).priceCents;
     const { user, league, portfolio } = await createPlayer(1_000_000);
     const key = crypto.randomUUID();
     const order = {
@@ -118,7 +119,7 @@ describe("trading engine (integration)", () => {
   });
 
   it("never lets simultaneous sells oversell a position", async () => {
-    const price = (await getQuote(SYMBOL, "SIMULATED", NOW)).priceCents;
+    const price = (await getQuote(SYMBOL, NOW)).priceCents;
     const { user, league, portfolio } = await createPlayer(1_000_000);
     const base = { userId: user.id, leagueId: league.id, symbol: SYMBOL, expectedPriceCents: price, now: NOW };
     await executeTrade({ ...base, side: "BUY", quantity: 5, idempotencyKey: crypto.randomUUID() });
@@ -165,7 +166,7 @@ describe("trading engine (integration)", () => {
       update: { isActive: true },
     });
     invalidateInstruments();
-    const price = (await getQuote("ZZTEST", "SIMULATED", NOW)).priceCents;
+    const price = (await getQuote("ZZTEST", NOW)).priceCents;
     const { user, league, portfolio } = await createPlayer(1_000_000);
     const res = await executeTrade({
       userId: user.id,
@@ -210,5 +211,60 @@ describe("trading engine (integration)", () => {
         code: "UNKNOWN_SYMBOL",
       },
     );
+  });
+  it("rejects orders while the US market is closed", async () => {
+    const { user, league } = await createPlayer(1_000_000);
+    await expect(
+      executeTrade({
+        userId: user.id,
+        leagueId: league.id,
+        symbol: SYMBOL,
+        side: "BUY",
+        quantity: 1,
+        expectedPriceCents: 1,
+        idempotencyKey: crypto.randomUUID(),
+        now: new Date("2026-06-13T15:00:00Z"), // Saturday
+      }),
+    ).rejects.toMatchObject({ code: "MARKET_CLOSED" });
+  });
+
+  it("leaving a league deletes the portfolio and hands ownership on", async () => {
+    const owner = await createPlayer(1_000_000);
+    await db.league.update({ where: { id: owner.league.id }, data: { ownerId: owner.user.id } });
+    const friend = await db.user.create({
+      data: { email: `f${Math.random()}@test.dev`, username: `f${Math.floor(Math.random() * 1e9)}`, avatarSeed: "y" },
+    });
+    await db.portfolio.create({ data: { userId: friend.id, leagueId: owner.league.id, cashCents: 1_000_000 } });
+    const price = (await getQuote(SYMBOL, NOW)).priceCents;
+    await executeTrade({
+      userId: owner.user.id,
+      leagueId: owner.league.id,
+      symbol: SYMBOL,
+      side: "BUY",
+      quantity: 1,
+      expectedPriceCents: price,
+      idempotencyKey: crypto.randomUUID(),
+      now: NOW,
+    });
+
+    await expect(leaveLeague(owner.user.id, owner.league.id)).resolves.toEqual({ deletedLeague: false });
+    expect(await db.portfolio.count({ where: { id: owner.portfolio.id } })).toBe(0);
+    expect(await db.trade.count({ where: { portfolioId: owner.portfolio.id } })).toBe(0);
+    expect((await db.league.findUniqueOrThrow({ where: { id: owner.league.id } })).ownerId).toBe(friend.id);
+
+    // last member out: the league is removed
+    await expect(leaveLeague(friend.id, owner.league.id)).resolves.toEqual({ deletedLeague: true });
+    expect(await db.league.count({ where: { id: owner.league.id } })).toBe(0);
+  });
+
+  it("does not allow leaving the Global league", async () => {
+    const { user } = await createPlayer(1_000_000);
+    await db.league.upsert({
+      where: { id: "global" },
+      create: { id: "global", kind: "GLOBAL", name: "Global League", startsAt: new Date("2026-01-01") },
+      update: {},
+    });
+    await db.portfolio.create({ data: { userId: user.id, leagueId: "global", cashCents: 1_000_000 } });
+    await expect(leaveLeague(user.id, "global")).rejects.toBeInstanceOf(LeaveError);
   });
 });

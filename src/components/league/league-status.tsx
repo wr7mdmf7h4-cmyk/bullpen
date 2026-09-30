@@ -34,11 +34,3 @@ export function LeagueStatusBadge({
     </span>
   );
 }
-
-export function MarketSourceBadge({ source }: { source: "LIVE" | "SIMULATED" }) {
-  return (
-    <span className="rounded-full border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-      {source === "LIVE" ? "Live US market" : "Simulated · 24/7"}
-    </span>
-  );
-}

@@ -17,7 +17,6 @@ import { RankBadge, RankProgress } from "./rank-badge";
 type Props = {
   portfolioId: string;
   leagueName: string;
-  source: "LIVE" | "SIMULATED";
   startingCashCents: number;
   cashCents: number;
   realizedPnlCents: number;
@@ -27,7 +26,6 @@ type Props = {
   startOfDayCents: number;
   initialPoints: PricePoint[];
   status: MarketStatusDTO;
-  realQuotes: boolean;
   compact?: boolean;
 };
 
@@ -36,7 +34,7 @@ type Props = {
  * against polled quotes, so values tick without a round trip per render.
  */
 export function PortfolioOverview(props: Props) {
-  const quotes = useLiveQuotes(props.initialQuotes, props.source);
+  const quotes = useLiveQuotes(props.initialQuotes);
   const prices = Object.fromEntries(Object.values(quotes).map((q) => [q.symbol, q.priceCents]));
   const v = valuePortfolio(props.cashCents, props.holdings, prices, props.startingCashCents);
   const names = Object.fromEntries(props.holdings.map((h) => [h.symbol, h.name]));
@@ -54,7 +52,7 @@ export function PortfolioOverview(props: Props) {
         valueCents={v.totalValueCents}
         baselineCents={props.startOfDayCents}
         initialPoints={props.initialPoints}
-        aside={<MarketStatusPill status={props.status} realQuotes={props.realQuotes} />}
+        aside={<MarketStatusPill status={props.status} />}
         height={props.compact ? 200 : 260}
       />
 

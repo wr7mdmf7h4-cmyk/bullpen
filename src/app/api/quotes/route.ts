@@ -6,7 +6,6 @@ import { tickerSchema } from "@/lib/validators";
 import { serializeQuote } from "@/lib/serialize";
 
 const querySchema = z.object({
-  source: z.enum(["LIVE", "SIMULATED"]),
   symbols: z
     .string()
     .transform((s) => s.split(",").filter(Boolean))
@@ -22,7 +21,7 @@ export async function GET(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid query" }, { status: 400 });
 
   try {
-    const quotes = await getQuotes(parsed.data.symbols, parsed.data.source);
+    const quotes = await getQuotes(parsed.data.symbols);
     return NextResponse.json(
       { quotes: [...quotes.values()].map(serializeQuote) },
       { headers: { "Cache-Control": "private, no-store" } },

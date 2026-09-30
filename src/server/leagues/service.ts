@@ -7,7 +7,6 @@ import { INVITE_CODE_LENGTH, inviteCodeFromBytes, leagueStatus } from "@/domain/
 
 export type CreateLeagueInput = {
   name: string;
-  marketSource: "LIVE" | "SIMULATED";
   startsAt: Date;
   endsAt: Date;
   startingCashCents: number;
@@ -73,4 +72,38 @@ export async function getLeagueForMember(leagueId: string, userId: string) {
     },
   });
   return portfolio;
+}
+
+export class LeaveError extends Error {}
+
+/**
+ * Leaves a private league: the member's portfolio (cash, holdings, trades,
+ * snapshots) and their activity there are deleted in one transaction. If the
+ * owner leaves, ownership passes to the longest-standing member; a league
+ * left empty is deleted.
+ */
+export async function leaveLeague(userId: string, leagueId: string) {
+  return db.$transaction(async (tx) => {
+    const league = await tx.league.findUnique({ where: { id: leagueId }, select: { kind: true, ownerId: true } });
+    if (!league) throw new LeaveError("That league doesn't exist.");
+    if (league.kind === "GLOBAL") throw new LeaveError("Everyone plays in the Global League, so it can't be left.");
+
+    const removed = await tx.portfolio.deleteMany({ where: { userId, leagueId } });
+    if (!removed.count) throw new LeaveError("You're not in that league.");
+    await tx.activityEvent.deleteMany({ where: { userId, leagueId } });
+
+    const next = await tx.portfolio.findFirst({
+      where: { leagueId },
+      orderBy: { joinedAt: "asc" },
+      select: { userId: true },
+    });
+    if (!next) {
+      await tx.league.delete({ where: { id: leagueId } });
+      return { deletedLeague: true };
+    }
+    if (league.ownerId === userId) {
+      await tx.league.update({ where: { id: leagueId }, data: { ownerId: next.userId } });
+    }
+    return { deletedLeague: false };
+  });
 }

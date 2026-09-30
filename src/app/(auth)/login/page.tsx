@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { DemoButton, GoogleButton, LogInForm } from "@/components/auth/auth-forms";
+import { GoogleButton, LogInForm } from "@/components/auth/auth-forms";
 import { googleEnabled } from "@/server/auth";
 import { getCurrentUser } from "@/server/users";
 
@@ -22,11 +22,12 @@ export default async function LogInPage({ searchParams }: PageProps<"/login">) {
         </p>
       )}
       <LogInForm next={typeof next === "string" ? next : undefined} />
-      <Divider />
-      <div className="grid gap-3">
-        {googleEnabled && <GoogleButton />}
-        <DemoButton>Skip it, try the demo</DemoButton>
-      </div>
+      {googleEnabled && (
+        <>
+          <Divider />
+          <GoogleButton />
+        </>
+      )}
       <p className="text-center text-sm text-muted-foreground">
         New here?{" "}
         <Link

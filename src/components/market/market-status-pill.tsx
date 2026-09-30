@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 import { formatDuration } from "@/domain/leagues";
 import { cn } from "@/lib/utils";
 
-export type MarketStatusDTO =
-  { state: "ALWAYS_OPEN" } | { state: "OPEN"; closesAt: number } | { state: "CLOSED"; opensAt: number };
+export type MarketStatusDTO = { state: "OPEN"; closesAt: number } | { state: "CLOSED"; opensAt: number };
 
 function useNow(intervalMs: number) {
   const [now, setNow] = useState(() => Date.now());
@@ -17,22 +16,14 @@ function useNow(intervalMs: number) {
   return now;
 }
 
-export function MarketStatusPill({
-  status,
-  realQuotes,
-  className,
-}: {
-  status: MarketStatusDTO;
-  realQuotes: boolean;
-  className?: string;
-}) {
+/** US market status with a live countdown; refreshes the page at the open/close. */
+export function MarketStatusPill({ status, className }: { status: MarketStatusDTO; className?: string }) {
   const now = useNow(15_000);
   const router = useRouter();
-  const boundary = status.state === "OPEN" ? status.closesAt : status.state === "CLOSED" ? status.opensAt : null;
+  const boundary = status.state === "OPEN" ? status.closesAt : status.opensAt;
 
-  // When the market opens/closes, refresh the server-rendered status.
   useEffect(() => {
-    if (boundary && now >= boundary) router.refresh();
+    if (now >= boundary) router.refresh();
   }, [boundary, now, router]);
 
   const base = "inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium whitespace-nowrap";
@@ -44,19 +35,13 @@ export function MarketStatusPill({
       </span>
     );
   }
-  const label =
-    status.state === "ALWAYS_OPEN"
-      ? "Simulated · 24/7"
-      : realQuotes
-        ? "Market open · live"
-        : "Market open · simulated prices";
   return (
     <span className={cn(base, "border-primary/25 bg-primary/5 text-foreground", className)}>
       <span className="relative flex size-1.5">
         <span className="absolute inline-flex size-full animate-ping rounded-full bg-primary opacity-60" />
         <span className="relative inline-flex size-1.5 rounded-full bg-primary" />
       </span>
-      {label}
+      Market open · live
     </span>
   );
 }

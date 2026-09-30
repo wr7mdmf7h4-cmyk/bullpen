@@ -1,5 +1,7 @@
 /**
- * Deterministic simulated market.
+ * Deterministic FAKE market, for development and automated tests only
+ * (FAKE_MARKET_DATA=1; refused in production). Real users only ever see real
+ * Finnhub prices.
  *
  * Price is a pure function of (symbol, time): the log-price is a sum of
  * smooth value-noise "octaves" (2 minutes → 1 year) whose amplitudes scale
@@ -80,20 +82,6 @@ export function simulatedPriceCents(def: InstrumentDef, t: number): number {
   const drift = -0.08 + ((seed % 1000) / 1000) * 0.3;
   logPrice += (drift * (tq - REFERENCE_TIME)) / YEAR_MS;
   return Math.max(1, Math.round(def.basePrice * 100 * Math.exp(logPrice)));
-}
-
-export type PriceAnchor = { priceCents: number; at: number };
-
-/**
- * Re-bases an instrument so the simulation passes exactly through a real
- * observed price. Scaling the base price rescales the whole path, so the
- * *shape* (every relative move) is unchanged: the simulated 24/7 market then
- * tracks the real market, wandering realistically between real quotes.
- */
-export function anchorInstrument(def: InstrumentDef, anchor: PriceAnchor): InstrumentDef {
-  if (anchor.priceCents <= 0) return def;
-  const simulatedAtAnchor = simulatedPriceCents(def, anchor.at);
-  return { ...def, basePrice: (def.basePrice * anchor.priceCents) / simulatedAtAnchor };
 }
 
 type Window = { from: number; to: number; stepMs: number };

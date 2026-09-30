@@ -1,6 +1,6 @@
 # Deploying Bullpen: step-by-step
 
-About 15 minutes, all on free tiers. Vercel hosts the app and, through its Neon integration, creates the database for you. The first build sets up everything: tables, all ~12,000 US stocks and ETFs, and the demo world. Nothing needs to run on your laptop.
+About 15 minutes, all on free tiers. Vercel hosts the app and, through its Neon integration, creates the database for you. The first build sets up everything: the tables and all ~12,000 US stocks and ETFs. Nothing needs to run on your laptop.
 
 > **Never commit `.env`.** It's already in `.gitignore`. Secrets go in Vercel's settings (and your local `.env` if you develop locally), nowhere else.
 
@@ -17,7 +17,7 @@ About 15 minutes, all on free tiers. Vercel hosts the app and, through its Neon 
 | [Upstash](https://upstash.com)                   | Rate limiting shared across servers         | Optional (falls back to in-memory)   |
 | [Google Cloud](https://console.cloud.google.com) | "Continue with Google" button               | Optional                             |
 
-Without a Finnhub key everything still works, but prices come from the built-in simulation. For a real-market app, get the key (it's free: sign up at <https://finnhub.io/register>, the key is on your dashboard).
+Bullpen only shows real prices, so you need a Finnhub key (it's free: sign up at <https://finnhub.io/register>, the key is on your dashboard). Without one, prices show as unavailable.
 
 ---
 
@@ -74,8 +74,8 @@ openssl rand -base64 32
 ## 5. Redeploy and play
 
 1. Go to **Deployments**, open the **⋯** menu on the latest deployment, and choose **Redeploy**.
-2. This build log shows the setup happening: migrations applied, `✅ 11,9xx tradable symbols synced`, `🌱 Seeding Bullpen…`. Later deploys skip the seed and keep everyone's data.
-3. Open your URL (like `bullpen-xyz.vercel.app`), click **Try the demo**, and press <kbd>⌘K</kbd> to search any stock.
+2. This build log shows the setup happening: migrations applied and `✅ 11,9xx tradable symbols synced`. Later deploys keep everyone's data.
+3. Open your URL (like `bullpen-xyz.vercel.app`), sign up, and press <kbd>⌘K</kbd> to search any stock.
 4. Under **Settings → Cron Jobs** you should see `/api/cron/snapshot` running daily (portfolio snapshots + weekly stock-list refresh).
 
 From now on, every `git push` to `main` redeploys automatically.
@@ -139,7 +139,7 @@ After the domain works:
 
 - Nothing to change in the app itself: Auth.js trusts the host it's served on.
 - If you use Google sign-in, add `https://yourdomain.com/api/auth/callback/google` to the OAuth client's redirect URIs.
-- Update the demo link in `README.md` and the website field on your GitHub repo.
+- Update the app link in `README.md` and the website field on your GitHub repo.
 
 Tip: check the **renewal** price, not just the first-year price, and turn on auto-renew so the link on your CV never dies.
 
@@ -147,7 +147,7 @@ Tip: check the **renewal** price, not just the first-year price, and turn on aut
 
 ## 8. Make it CV-ready
 
-- In `README.md`, make sure the demo link points at your domain, then push.
+- In `README.md`, make sure the app link points at your domain, then push.
 - On the GitHub repo page, click ⚙️ next to **About** and add a description, your Vercel URL as the website, and topics (`nextjs`, `typescript`, `postgres`, `prisma`, `trading`, `game`).
 - Check the **Actions** tab shows a green tick.
 - Optional: record a 10-second GIF of a profitable sell with confetti and add it to the top of the README.
@@ -161,7 +161,7 @@ Tip: check the **renewal** price, not just the first-year price, and turn on aut
 | Build fails at `prisma migrate deploy`               | If you brought your own Neon project, `DIRECT_URL` must be the non-pooled URL. With the Vercel integration this is automatic. |
 | "Invalid environment variables" / error page         | The database isn't connected yet (step 4) or `AUTH_SECRET` is missing; fix it, then redeploy.                                 |
 | Only ~54 stocks are searchable                       | The stock sync failed during the build (see the log). Redeploy, or wait for the daily cron.                                   |
-| "Market closed" and Buy is disabled                  | The Global League follows real US market hours (9:30–16:00 ET, weekdays). Switch to **24/7 Practice** in the league menu.     |
+| "Market closed" and Buy is disabled                  | Prices are real, so orders fill during US market hours (9:30am–4pm ET, weekdays). The countdown shows when it reopens.        |
 | "We couldn't get a live price…"                      | Finnhub didn't return a price in time (free tier: 60 calls/min). Wait a minute and retry.                                     |
 | Leaderboard updates every ~10 seconds, not instantly | Expected without Ably. Add `ABLY_API_KEY` for push updates.                                                                   |
 | Google button missing                                | Both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` must be set, then redeploy.                                                |

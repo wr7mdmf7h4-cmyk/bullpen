@@ -6,9 +6,6 @@ import { auth } from "./auth";
 import { hashPassword } from "./auth/password";
 import { joinSystemLeagues } from "./leagues/membership";
 
-export const DEMO_EMAIL = "demo@bullpen.dev";
-export const DEMO_USERNAME = "demo";
-
 export class UserExistsError extends Error {
   constructor(public field: "email" | "username") {
     super(field === "email" ? "An account with that email already exists" : "That username is taken");
@@ -46,17 +43,6 @@ export async function findOrCreateGoogleUser(email: string) {
   const existing = await db.user.findUnique({ where: { email } });
   if (existing) return existing;
   const user = await db.user.create({ data: { email, avatarSeed: newAvatarSeed() } });
-  await joinSystemLeagues(user.id);
-  return user;
-}
-
-/** The demo account is created on demand so demo login works even without the seed. */
-export async function ensureDemoUser() {
-  const existing = await db.user.findUnique({ where: { email: DEMO_EMAIL } });
-  if (existing) return existing;
-  const user = await db.user
-    .create({ data: { email: DEMO_EMAIL, username: DEMO_USERNAME, avatarSeed: "demo-bull", isDemo: true } })
-    .catch(() => db.user.findUniqueOrThrow({ where: { email: DEMO_EMAIL } }));
   await joinSystemLeagues(user.id);
   return user;
 }

@@ -13,7 +13,6 @@ export default async function GameLayout({ children }: LayoutProps<"/">) {
     id: league.id,
     name: league.name,
     kind: league.kind,
-    marketSource: league.marketSource,
   }));
   return (
     <div className="flex min-h-dvh flex-col">
@@ -24,7 +23,7 @@ export default async function GameLayout({ children }: LayoutProps<"/">) {
           <div className="ml-auto flex items-center gap-2">
             <StockSearch />
             <LeagueSwitcher leagues={leagues} activeId={active.leagueId} />
-            <UserMenu username={user.username} avatarSeed={user.avatarSeed} isDemo={user.isDemo} />
+            <UserMenu username={user.username} avatarSeed={user.avatarSeed} />
           </div>
         </div>
       </header>

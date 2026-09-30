@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/server/env";
 import { db } from "@/server/db";
 import { invalidateInstruments } from "@/server/instruments";
+import { recordDailyCloses } from "@/server/market";
 import { snapshotAllPortfolios } from "@/server/portfolio";
 import { lastSyncedAt, syncInstruments } from "@/lib/instrument-sync";
 
@@ -11,7 +12,8 @@ const WEEK_MS = 7 * 86_400_000;
 export const maxDuration = 60;
 
 /**
- * Daily job (Vercel Cron → vercel.json): snapshot every portfolio, and
+ * Daily job after the US close (Vercel Cron → vercel.json): record real
+ * closing prices for popular and held stocks, snapshot every portfolio, and
  * re-sync the instrument universe (new listings / delistings) once a week. Vercel sends
  * `Authorization: Bearer $CRON_SECRET`. Without CRON_SECRET the endpoint only
  * works in development; trades still snapshot on their own.
@@ -27,6 +29,7 @@ export async function GET(req: NextRequest) {
   }
 
   const started = Date.now();
+  const closes = await recordDailyCloses();
   const snapshots = await snapshotAllPortfolios();
 
   let instruments: { symbols: number; delisted: number } | { skipped: true } | { error: string } = { skipped: true };
@@ -39,5 +42,5 @@ export async function GET(req: NextRequest) {
       instruments = { error: String(err) }; // snapshots still succeeded
     }
   }
-  return NextResponse.json({ snapshots, instruments, ms: Date.now() - started });
+  return NextResponse.json({ closes, snapshots, instruments, ms: Date.now() - started });
 }

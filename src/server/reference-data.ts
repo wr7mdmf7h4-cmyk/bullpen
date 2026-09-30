@@ -10,7 +10,7 @@ import {
 } from "@/domain/leagues";
 
 /**
- * Makes sure the popular instruments and the two system leagues exist.
+ * Makes sure the popular instruments and the Global league exist.
  * Idempotent and memoised per process, so a fresh database works without the
  * seed or a full instrument sync (you just get the popular list until then).
  */
@@ -27,8 +27,6 @@ export function ensureReferenceData(): Promise<void> {
           exchange: p.exchange,
           isEtf: p.sector === "ETF",
           isPopular: true,
-          basePriceCents: Math.round(p.basePrice * 100),
-          volBps: Math.round(p.vol * 10_000),
         };
         await db.instrument.upsert({
           where: { symbol: p.symbol },

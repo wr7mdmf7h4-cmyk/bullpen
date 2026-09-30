@@ -20,15 +20,13 @@ export type MarketRow = { symbol: string; name: string; sector: string; spark: n
 export function MarketsTable({
   rows,
   initialQuotes,
-  source,
   universeCount,
 }: {
   rows: MarketRow[];
   initialQuotes: QuoteDTO[];
-  source: "LIVE" | "SIMULATED";
   universeCount: number;
 }) {
-  const quotes = useLiveQuotes(initialQuotes, source);
+  const quotes = useLiveQuotes(initialQuotes);
   const [query, setQuery] = useState("");
   const [sector, setSector] = useState<string | null>(null);
 
@@ -166,8 +164,7 @@ export function MarketsTable({
           <ul className="surface divide-y overflow-hidden">
             {visible.map((row) => {
               const q = quotes[row.symbol];
-              if (!q) return null;
-              const bps = changeBps(q);
+              const bps = q ? changeBps(q) : 0;
               return (
                 <li key={row.symbol}>
                   <Link
@@ -180,12 +177,18 @@ export function MarketsTable({
                       <div className="truncate text-xs text-muted-foreground">{row.name}</div>
                     </div>
                     <Sparkline points={row.spark} positive={bps >= 0} className="hidden sm:block" />
-                    <div className="grid justify-items-end gap-0.5">
-                      <FlashNumber value={q.priceCents} className="num text-sm font-semibold">
-                        {formatCents(q.priceCents)}
-                      </FlashNumber>
-                      <Delta bps={bps} cents={changeCents(q)} showCents={false} size="xs" />
-                    </div>
+                    {q ? (
+                      <div className="grid justify-items-end gap-0.5">
+                        <FlashNumber value={q.priceCents} className="num text-sm font-semibold">
+                          {formatCents(q.priceCents)}
+                        </FlashNumber>
+                        <Delta bps={bps} cents={changeCents(q)} showCents={false} size="xs" />
+                      </div>
+                    ) : (
+                      <span className="text-sm text-muted-foreground" title="Price loading">
+                        —
+                      </span>
+                    )}
                   </Link>
                 </li>
               );

@@ -134,9 +134,7 @@ export function TradeTicket({
         </div>
         <p className="font-medium">Trading paused</p>
         <p className="text-sm text-muted-foreground">{tradability.reason}</p>
-        <p className="text-xs text-muted-foreground">
-          Want to trade right now? Switch to <span className="text-foreground">24/7 Practice</span> in the league menu.
-        </p>
+        <p className="text-xs text-muted-foreground">You can still review prices and set up your next move.</p>
       </div>
     );
   }

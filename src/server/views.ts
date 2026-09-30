@@ -1,8 +1,14 @@
 import "server-only";
 import { db } from "./db";
-import { getQuotes, usesRealQuotes } from "./market";
-import { getPortfolioDetail, getPortfolioHistory, getStartOfDayValue, valuePortfolioNow } from "./portfolio";
 import { findInstruments } from "./instruments";
+import { getQuotes } from "./market";
+import {
+  getPortfolioDetail,
+  getPortfolioHistory,
+  getStartOfDayValue,
+  maybeRecordSnapshot,
+  valuePortfolioNow,
+} from "./portfolio";
 import { marketStatus } from "@/domain/market/status";
 import { sectorAllocation } from "@/domain/portfolio";
 import { serializeQuote } from "@/lib/serialize";
@@ -10,17 +16,18 @@ import { serializeStatus } from "@/lib/market-status";
 
 /** Everything the portfolio overview component needs, in one call. */
 export async function loadPortfolioOverview(portfolioId: string, now = new Date()) {
+  // Viewing the portfolio records a real value point (at most every 15 min).
+  await maybeRecordSnapshot(portfolioId, now).catch((e) => console.error("[views] snapshot failed", e));
+
   const p = await getPortfolioDetail(portfolioId);
   const symbols = p.holdings.map((h) => h.symbol);
-  const [quotes, valuation, history] = await Promise.all([
-    symbols.length ? getQuotes(symbols, p.league.marketSource, { now }) : Promise.resolve(new Map()),
+  const [quotes, valuation, history, instruments] = await Promise.all([
+    symbols.length ? getQuotes(symbols, { now }) : Promise.resolve(new Map()),
     valuePortfolioNow(p, now),
     getPortfolioHistory(p.id, "1D", now),
-  ]);
-  const [startOfDayCents, instruments] = await Promise.all([
-    getStartOfDayValue(p.id, valuation.totalValueCents, now),
     findInstruments(symbols),
   ]);
+  const startOfDayCents = await getStartOfDayValue(p.id, valuation.totalValueCents, now);
 
   return {
     detail: p,
@@ -32,7 +39,6 @@ export async function loadPortfolioOverview(portfolioId: string, now = new Date(
     props: {
       portfolioId: p.id,
       leagueName: p.league.name,
-      source: p.league.marketSource,
       startingCashCents: p.league.startingCashCents,
       cashCents: p.cashCents,
       realizedPnlCents: p.realizedPnlCents,
@@ -46,8 +52,7 @@ export async function loadPortfolioOverview(portfolioId: string, now = new Date(
       initialQuotes: [...quotes.values()].map(serializeQuote),
       startOfDayCents,
       initialPoints: history,
-      status: serializeStatus(marketStatus(p.league.marketSource, now)),
-      realQuotes: usesRealQuotes(p.league.marketSource),
+      status: serializeStatus(marketStatus(now)),
     },
   };
 }

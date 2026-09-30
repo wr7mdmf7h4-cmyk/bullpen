@@ -1,36 +1,32 @@
 import "server-only";
 import { db } from "../db";
-import { env } from "../env";
-import type { InstrumentDef } from "@/domain/market/universe";
+import { env, features } from "../env";
 import { findInstruments, popularInstruments } from "../instruments";
+import { isMarketOpen, previousSessionClose } from "@/domain/market/hours";
+import { simulatedHistory, simulatedQuote, simulatedYearRange } from "@/domain/market/simulated";
+import type { InstrumentDef } from "@/domain/market/universe";
+import { rangeStartMs, type ChartRange, type PricePoint, type Quote } from "@/domain/market/types";
 import {
-  anchorInstrument,
-  simulatedHistory,
-  simulatedPriceCents,
-  simulatedQuote,
-  simulatedYearRange,
-  type PriceAnchor,
-} from "@/domain/market/simulated";
-import { calendarFor } from "@/domain/market/status";
-import { isMarketOpen } from "@/domain/market/hours";
-import type { ChartRange, PricePoint, Quote } from "@/domain/market/types";
-import type { MarketSourceKind } from "@/domain/leagues";
-import { fetchMetrics, fetchQuote, type FundamentalMetrics, type Priority } from "./finnhub";
+  CandlesNotIncluded,
+  fetchCandles,
+  fetchMetrics,
+  fetchQuote,
+  type FundamentalMetrics,
+  type Priority,
+} from "./finnhub";
 
 /**
- * Market data facade. Callers ask for quotes "for a league's market source";
- * this module decides where they come from:
+ * Market data: real prices only.
  *
- *   SIMULATED league           → deterministic simulation, always open
- *   LIVE league, no API key    → simulation on the real NYSE calendar
- *   LIVE league, FINNHUB key   → Finnhub, through a two-tier cache
- *                                (in-memory → Postgres QuoteCache → API),
- *                                falling back to the last known price and
- *                                finally to the simulation if the API fails.
+ * Quotes come from Finnhub through a two-tier cache (in-memory → Postgres
+ * QuoteCache → API). If a fresh price can't be had, callers get the last
+ * real price we saw, or nothing ("price unavailable"), never an invented one.
  *
- * Whenever a real price has been seen for a symbol, the simulation is
- * anchored to it (anchorInstrument), so the 24/7 simulated leagues track
- * real price levels and only the moves in between are simulated.
+ * Every real price we observe is also written to PriceSample, which is where
+ * chart history comes from (Finnhub's free plan has no historical candles).
+ *
+ * For local development and automated tests only, FAKE_MARKET_DATA=1 swaps in
+ * a deterministic fake market; production refuses it.
  */
 
 export class UnknownSymbolError extends Error {
@@ -39,61 +35,46 @@ export class UnknownSymbolError extends Error {
   }
 }
 
-// Last real price per symbol, read from the shared QuoteCache and memoised
-// briefly per instance.
-const ANCHOR_TTL_MS = 5 * 60_000;
-const anchors = new Map<string, { anchor: PriceAnchor | null; loadedAt: number }>();
-
-function rememberAnchor(symbol: string, priceCents: number, at: number) {
-  anchors.set(symbol, { anchor: { priceCents, at }, loadedAt: Date.now() });
+export class PriceUnavailableError extends Error {
+  constructor(symbol: string) {
+    super(`No price available for ${symbol} right now`);
+  }
 }
 
-async function loadAnchors(symbols: string[]): Promise<Map<string, PriceAnchor>> {
-  const now = Date.now();
-  const stale = symbols.filter((s) => {
-    const hit = anchors.get(s);
-    return !hit || now - hit.loadedAt > ANCHOR_TTL_MS;
-  });
-  if (stale.length) {
-    const rows = await db.quoteCache.findMany({
-      where: { symbol: { in: stale } },
-      select: { symbol: true, priceCents: true, fetchedAt: true },
-    });
-    const found = new Map(rows.map((r) => [r.symbol, { priceCents: r.priceCents, at: r.fetchedAt.getTime() }]));
-    for (const s of stale) anchors.set(s, { anchor: found.get(s) ?? null, loadedAt: now });
-  }
-  const out = new Map<string, PriceAnchor>();
-  for (const s of symbols) {
-    const a = anchors.get(s)?.anchor;
-    if (a) out.set(s, a);
-  }
-  return out;
+type Mode = "finnhub" | "fake" | "none";
+
+function mode(): Mode {
+  if (env().FINNHUB_API_KEY) return "finnhub";
+  return features().fakeMarketData ? "fake" : "none";
 }
 
-/** Instrument definitions for simulation, anchored to real prices where known. */
+/** True when prices are real (used by the UI and the order safety check). */
+export function usesRealQuotes() {
+  return mode() === "finnhub";
+}
+
+export function usesFakeQuotes() {
+  return mode() === "fake";
+}
+
 async function requireInstruments(symbols: string[]): Promise<Map<string, InstrumentDef>> {
   const defs = await findInstruments(symbols);
   for (const s of symbols) if (!defs.has(s)) throw new UnknownSymbolError(s);
-  const known = await loadAnchors(symbols);
-  const out = new Map<string, InstrumentDef>();
-  for (const [symbol, def] of defs) {
-    const anchor = known.get(symbol);
-    out.set(symbol, anchor ? anchorInstrument(def, anchor) : def);
-  }
-  return out;
+  return defs;
 }
 
-async function requireInstrument(symbol: string): Promise<InstrumentDef> {
-  const s = symbol.toUpperCase();
-  return (await requireInstruments([s])).get(s)!;
-}
+// ── recorded history ─────────────────────────────────────────────────────
 
-function liveKey() {
-  return env().FINNHUB_API_KEY;
-}
-
-export function usesRealQuotes(source: MarketSourceKind) {
-  return source === "LIVE" && Boolean(liveKey());
+/** Store a real quote: the latest trade price and the previous session's close. */
+async function recordSamples(quotes: Quote[]) {
+  const rows = quotes.flatMap((q) => {
+    const out = [{ symbol: q.symbol, takenAt: q.asOf, priceCents: q.priceCents }];
+    if (q.prevCloseCents > 0) {
+      out.push({ symbol: q.symbol, takenAt: previousSessionClose(q.asOf), priceCents: q.prevCloseCents });
+    }
+    return out;
+  });
+  if (rows.length) await db.priceSample.createMany({ data: rows, skipDuplicates: true });
 }
 
 // ── live quote cache ──────────────────────────────────────────────────────
@@ -108,12 +89,11 @@ function ttlMs(now: Date) {
 
 async function liveQuotes(
   symbols: string[],
-  defs: Map<string, InstrumentDef>,
   now: Date,
   maxFetch: number,
   priority: Priority,
 ): Promise<Map<string, Quote>> {
-  const key = liveKey()!;
+  const key = env().FINNHUB_API_KEY!;
   const ttl = ttlMs(now);
   const out = new Map<string, Quote>();
 
@@ -154,94 +134,190 @@ async function liveQuotes(
   // 3. Finnhub, bounded per request to respect the free-tier rate limit
   const toFetch = missing.slice(0, maxFetch);
   const fetched = await Promise.allSettled(toFetch.map((s) => fetchQuote(s, key, priority)));
-  const writes: Promise<unknown>[] = [];
+  const fresh: Quote[] = [];
   fetched.forEach((result, i) => {
     const symbol = toFetch[i]!;
     if (result.status === "fulfilled") {
-      const q = result.value;
-      out.set(symbol, q);
-      memory.set(symbol, { ...q, cachedAt: now.getTime() });
-      rememberAnchor(symbol, q.priceCents, now.getTime());
-      const data = { priceCents: q.priceCents, prevCloseCents: q.prevCloseCents, fetchedAt: now };
-      writes.push(db.quoteCache.upsert({ where: { symbol }, update: data, create: { symbol, ...data } }));
+      out.set(symbol, result.value);
+      memory.set(symbol, { ...result.value, cachedAt: now.getTime() });
+      fresh.push(result.value);
     } else {
       console.warn(`[market] ${symbol}: ${String(result.reason)}`);
     }
   });
-  await Promise.allSettled(writes);
+  await Promise.allSettled([
+    ...fresh.map((q) => {
+      const data = { priceCents: q.priceCents, prevCloseCents: q.prevCloseCents, fetchedAt: now };
+      return db.quoteCache.upsert({ where: { symbol: q.symbol }, update: data, create: { symbol: q.symbol, ...data } });
+    }),
+    recordSamples(fresh),
+  ]);
 
-  // 4. fallbacks: last known price, then the simulation
+  // 4. fallback: the last real price we saw (never an invented one)
   for (const symbol of missing) {
-    if (out.has(symbol)) continue;
-    out.set(symbol, stale.get(symbol) ?? simulatedQuote(defs.get(symbol)!, "NYSE", now));
+    const last = stale.get(symbol);
+    if (!out.has(symbol) && last) out.set(symbol, last);
   }
   return out;
 }
 
 // ── public API ────────────────────────────────────────────────────────────
 
+/**
+ * Quotes for many symbols. Symbols with no real price available are simply
+ * absent from the result. Bulk callers refresh a few stale symbols per
+ * request; the rest are served from cache and catch up on the next request.
+ */
 export async function getQuotes(
   symbols: string[],
-  source: MarketSourceKind,
   opts: { now?: Date; maxFetch?: number; priority?: Priority } = {},
 ): Promise<Map<string, Quote>> {
   const now = opts.now ?? new Date();
   const unique = [...new Set(symbols.map((s) => s.toUpperCase()))];
   const defs = await requireInstruments(unique);
-  if (usesRealQuotes(source)) {
-    // Bulk callers refresh a few stale symbols per request; the rest are
-    // served from cache and catch up on the next request.
-    return liveQuotes(unique, defs, now, opts.maxFetch ?? 10, opts.priority ?? "bulk");
+  switch (mode()) {
+    case "finnhub":
+      return liveQuotes(unique, now, opts.maxFetch ?? 10, opts.priority ?? "bulk");
+    case "fake":
+      return new Map(unique.map((s) => [s, simulatedQuote(defs.get(s)!, "NYSE", now)]));
+    case "none":
+      return new Map();
   }
-  const calendar = calendarFor(source);
-  return new Map(unique.map((s) => [s, simulatedQuote(defs.get(s)!, calendar, now)]));
 }
 
 /** One symbol at high priority: the stock page and order execution use this. */
-export async function getQuote(symbol: string, source: MarketSourceKind, now = new Date()): Promise<Quote> {
-  const quotes = await getQuotes([symbol], source, { now, maxFetch: 1, priority: "high" });
-  return quotes.get(symbol.toUpperCase())!;
+export async function getQuote(symbol: string, now = new Date()): Promise<Quote> {
+  const s = symbol.toUpperCase();
+  const quote = (await getQuotes([s], { now, maxFetch: 1, priority: "high" })).get(s);
+  if (!quote) throw new PriceUnavailableError(s);
+  return quote;
 }
 
 /** Quotes for the hand-picked popular list shown on the Markets page. */
-export async function getPopularQuotes(source: MarketSourceKind, now = new Date()) {
+export async function getPopularQuotes(now = new Date(), maxFetch?: number) {
   const popular = await popularInstruments();
   return getQuotes(
     popular.map((i) => i.symbol),
-    source,
-    { now },
+    { now, maxFetch },
   );
 }
 
-export type History = { points: PricePoint[]; illustrative: boolean };
+// ── history ───────────────────────────────────────────────────────────────
+
+export type HistorySource = "candles" | "recorded" | "fake";
+export type History = {
+  points: PricePoint[];
+  source: HistorySource;
+  /** earliest real price we hold for this symbol */
+  since: number | null;
+};
+
+const CANDLE_RESOLUTION: Record<ChartRange, string> = {
+  "1D": "5",
+  "1W": "30",
+  "1M": "60",
+  "3M": "D",
+  "6M": "D",
+  YTD: "D",
+  "1Y": "D",
+  "5Y": "W",
+};
+
+// Free Finnhub keys can't read candles; remember that instead of asking again.
+let candlesBlockedUntil = 0;
+const candleCache = new Map<string, { at: number; points: PricePoint[] }>();
+
+async function candleHistory(symbol: string, range: ChartRange, now: Date): Promise<PricePoint[] | null> {
+  if (Date.now() < candlesBlockedUntil) return null;
+  const cacheKey = `${symbol}:${range}`;
+  const ttl = range === "1D" ? 5 * 60_000 : 60 * 60_000;
+  const hit = candleCache.get(cacheKey);
+  if (hit && now.getTime() - hit.at < ttl) return hit.points;
+  try {
+    const points = await fetchCandles(
+      symbol,
+      CANDLE_RESOLUTION[range],
+      Math.floor(rangeStartMs(range, now.getTime()) / 1000),
+      Math.floor(now.getTime() / 1000),
+      env().FINNHUB_API_KEY!,
+    );
+    candleCache.set(cacheKey, { at: now.getTime(), points });
+    return points;
+  } catch (err) {
+    if (err instanceof CandlesNotIncluded) candlesBlockedUntil = Date.now() + 24 * 3_600_000;
+    return null;
+  }
+}
+
+/** Real prices we've recorded, thinned to one point per day for long ranges. */
+async function recordedHistory(symbol: string, range: ChartRange, now: Date): Promise<History> {
+  const from = new Date(rangeStartMs(range, now.getTime()));
+  const intraday = range === "1D" || range === "1W";
+  const [rows, first] = await Promise.all([
+    intraday
+      ? db.priceSample.findMany({
+          where: { symbol, takenAt: { gte: from, lte: now } },
+          orderBy: { takenAt: "asc" },
+          take: 2_000,
+          select: { takenAt: true, priceCents: true },
+        })
+      : db.$queryRaw<{ takenAt: Date; priceCents: number }[]>`
+          SELECT DISTINCT ON (date_trunc('day', "takenAt")) "takenAt", "priceCents"
+          FROM "PriceSample"
+          WHERE symbol = ${symbol} AND "takenAt" >= ${from} AND "takenAt" <= ${now}
+          ORDER BY date_trunc('day', "takenAt"), "takenAt" DESC`,
+    db.priceSample.findFirst({ where: { symbol }, orderBy: { takenAt: "asc" }, select: { takenAt: true } }),
+  ]);
+  const points = rows.map((r) => ({ t: r.takenAt.getTime(), p: r.priceCents })).sort((a, b) => a.t - b.t);
+  return { points, source: "recorded", since: first?.takenAt.getTime() ?? null };
+}
 
 /**
- * Chart history. With real quotes the *shape* comes from the simulation (free
- * Finnhub has no candles) but is anchored so it ends exactly at the live price;
- * the UI labels these charts as illustrative. Pass `anchor` when you already
- * have the quote, to avoid spending another API call on it.
+ * Chart history: Finnhub candles when the key's plan includes them, otherwise
+ * the real prices Bullpen has recorded. The current quote (if given) is
+ * appended so the line always ends at the live price.
  */
 export async function getHistory(
   symbol: string,
-  source: MarketSourceKind,
   range: ChartRange,
   now = new Date(),
-  anchor?: Quote,
+  current?: Quote,
 ): Promise<History> {
-  const def = await requireInstrument(symbol);
-  const calendar = calendarFor(source);
-  const points = simulatedHistory(def, calendar, range, now);
-  if (!usesRealQuotes(source)) return { points, illustrative: false };
+  const s = symbol.toUpperCase();
+  const def = (await requireInstruments([s])).get(s)!;
 
-  const live = anchor ?? (await getQuote(symbol, source, now));
-  if (live.source === "simulated") return { points, illustrative: false };
-  const last = points[points.length - 1]!;
-  const factor = live.priceCents / simulatedPriceCents(def, last.t);
-  return {
-    points: points.map((pt) => ({ t: pt.t, p: Math.max(1, Math.round(pt.p * factor)) })),
-    illustrative: true,
-  };
+  if (mode() === "fake") {
+    return { points: simulatedHistory(def, "NYSE", range, now), source: "fake", since: null };
+  }
+  if (mode() === "none") return { points: [], source: "recorded", since: null };
+
+  const candles = await candleHistory(s, range, now);
+  const history: History =
+    candles && candles.length > 1
+      ? { points: candles, source: "candles", since: candles[0]!.t }
+      : await recordedHistory(s, range, now);
+
+  if (current) {
+    const last = history.points[history.points.length - 1];
+    if (!last || last.t < current.asOf.getTime()) {
+      history.points.push({ t: current.asOf.getTime(), p: current.priceCents });
+    }
+  }
+  return history;
 }
+
+/** Daily job: record closing prices for the popular list and everything held. */
+export async function recordDailyCloses(now = new Date()) {
+  const [held, popular] = await Promise.all([
+    db.holding.findMany({ distinct: ["symbol"], select: { symbol: true } }),
+    popularInstruments(),
+  ]);
+  const symbols = [...new Set([...popular.map((p) => p.symbol), ...held.map((h) => h.symbol)])];
+  const quotes = await getQuotes(symbols, { now, maxFetch: 45, priority: "high" });
+  return { symbols: symbols.length, priced: quotes.size };
+}
+
+// ── key stats ─────────────────────────────────────────────────────────────
 
 export type KeyStats = {
   openCents: number | null;
@@ -256,11 +332,18 @@ export type KeyStats = {
   dividendYieldPct: number | null;
 };
 
+const NO_METRICS = {
+  yearHighCents: null,
+  yearLowCents: null,
+  marketCapDollars: null,
+  peRatio: null,
+  beta: null,
+  dividendYieldPct: null,
+};
+
 const metricsCache = new Map<string, { value: FundamentalMetrics; at: number }>();
 
-export async function getKeyStats(symbol: string, source: MarketSourceKind, now = new Date()): Promise<KeyStats> {
-  const def = await requireInstrument(symbol);
-  const quote = await getQuote(symbol, source, now);
+export async function getKeyStats(quote: Quote, now = new Date()): Promise<KeyStats> {
   const base = {
     openCents: quote.openCents,
     highCents: quote.highCents,
@@ -268,27 +351,59 @@ export async function getKeyStats(symbol: string, source: MarketSourceKind, now 
     prevCloseCents: quote.prevCloseCents,
   };
 
-  if (usesRealQuotes(source)) {
-    let metrics = metricsCache.get(def.symbol);
-    if (!metrics || now.getTime() - metrics.at > 24 * 3_600_000) {
-      try {
-        metrics = { value: await fetchMetrics(def.symbol, liveKey()!), at: now.getTime() };
-        metricsCache.set(def.symbol, metrics);
-      } catch (err) {
-        console.warn(`[market] metrics ${def.symbol}: ${String(err)}`);
-      }
-    }
-    if (metrics) return { ...base, ...metrics.value };
+  if (mode() === "fake") {
+    const def = (await requireInstruments([quote.symbol])).get(quote.symbol)!;
+    const year = simulatedYearRange(def, "NYSE", now);
+    return { ...base, ...NO_METRICS, yearHighCents: year.highCents, yearLowCents: year.lowCents };
   }
+  if (mode() !== "finnhub") return { ...base, ...NO_METRICS };
 
-  const year = simulatedYearRange(def, calendarFor(source), now);
-  return {
-    ...base,
-    yearHighCents: year.highCents,
-    yearLowCents: year.lowCents,
-    marketCapDollars: null,
-    peRatio: null,
-    beta: null,
-    dividendYieldPct: null,
-  };
+  let metrics = metricsCache.get(quote.symbol);
+  if (!metrics || now.getTime() - metrics.at > 24 * 3_600_000) {
+    try {
+      metrics = { value: await fetchMetrics(quote.symbol, env().FINNHUB_API_KEY!), at: now.getTime() };
+      metricsCache.set(quote.symbol, metrics);
+    } catch (err) {
+      console.warn(`[market] metrics ${quote.symbol}: ${String(err)}`);
+    }
+  }
+  return metrics ? { ...base, ...metrics.value } : { ...base, ...NO_METRICS };
+}
+
+/** Last day of recorded real prices for many symbols in one query (Markets page sparklines). */
+export async function getSparklines(symbols: string[], now = new Date(), points = 40): Promise<Map<string, number[]>> {
+  const out = new Map<string, number[]>();
+  if (!symbols.length) return out;
+  if (mode() === "fake") {
+    const defs = await requireInstruments(symbols);
+    for (const [s, def] of defs)
+      out.set(
+        s,
+        downsample(simulatedHistory(def, "NYSE", "1D", now), points).map((p) => p.p),
+      );
+    return out;
+  }
+  const rows = await db.priceSample.findMany({
+    where: { symbol: { in: symbols }, takenAt: { gte: new Date(rangeStartMs("1D", now.getTime())), lte: now } },
+    orderBy: { takenAt: "asc" },
+    select: { symbol: true, takenAt: true, priceCents: true },
+  });
+  const grouped = new Map<string, PricePoint[]>();
+  for (const r of rows) {
+    const list = grouped.get(r.symbol) ?? [];
+    list.push({ t: r.takenAt.getTime(), p: r.priceCents });
+    grouped.set(r.symbol, list);
+  }
+  for (const [s, list] of grouped)
+    out.set(
+      s,
+      downsample(list, points).map((p) => p.p),
+    );
+  return out;
+}
+
+function downsample<T>(items: T[], target: number): T[] {
+  if (items.length <= target) return items;
+  const step = (items.length - 1) / (target - 1);
+  return Array.from({ length: target }, (_, i) => items[Math.round(i * step)]!);
 }

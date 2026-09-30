@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { InviteLink } from "@/components/league/invite-link";
 import { LeagueLive } from "@/components/league/league-live";
-import { LeagueStatusBadge, MarketSourceBadge } from "@/components/league/league-status";
+import { LeagueStatusBadge } from "@/components/league/league-status";
+import { LeaveLeagueButton } from "@/components/league/leave-league-button";
 import { describeFees } from "@/domain/fees";
 import { formatCents } from "@/domain/money";
 import { features } from "@/server/env";
@@ -27,7 +28,6 @@ export default async function LeaguePage({ params }: PageProps<"/leagues/[id]">)
     <div className="grid gap-8">
       <header className="grid gap-4">
         <div className="flex flex-wrap items-center gap-2">
-          <MarketSourceBadge source={league.marketSource} />
           <LeagueStatusBadge league={league} now={now} />
         </div>
         <h1 className="text-3xl font-semibold tracking-tight">{league.name}</h1>
@@ -61,9 +61,14 @@ export default async function LeaguePage({ params }: PageProps<"/leagues/[id]">)
             </div>
           )}
         </dl>
-        {league.inviteCode && (
-          <div className="max-w-md">
-            <InviteLink code={league.inviteCode} />
+        {league.kind === "PRIVATE" && (
+          <div className="flex flex-wrap items-center gap-3">
+            {league.inviteCode && (
+              <div className="w-full max-w-md">
+                <InviteLink code={league.inviteCode} />
+              </div>
+            )}
+            <LeaveLeagueButton leagueId={league.id} leagueName={league.name} isOwner={league.ownerId === user.id} />
           </div>
         )}
       </header>

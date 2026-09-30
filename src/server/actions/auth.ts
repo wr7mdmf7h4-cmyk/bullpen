@@ -3,10 +3,10 @@
 import { AuthError } from "next-auth";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { signIn, signOut, mintDemoToken } from "../auth";
+import { signIn, signOut } from "../auth";
 import { db } from "../db";
 import { clientIp, rateLimit } from "../rate-limit";
-import { createPasswordUser, ensureDemoUser, getCurrentUser, UserExistsError } from "../users";
+import { createPasswordUser, getCurrentUser, UserExistsError } from "../users";
 import { logInSchema, signUpSchema, usernameSchema, type ActionResult } from "@/lib/validators";
 
 function tooMany(seconds: number): ActionResult {
@@ -62,15 +62,6 @@ export async function logInAction(_prev: ActionResult | undefined, formData: For
     if (err instanceof AuthError) return { ok: false, error: "Invalid email or password" };
     throw err;
   }
-}
-
-export async function demoLoginAction(): Promise<ActionResult> {
-  const limit = await rateLimit("demo", await clientIp());
-  if (!limit.ok) return tooMany(limit.retryAfterSeconds);
-
-  const demo = await ensureDemoUser();
-  await signIn("demo", { token: mintDemoToken(demo.id), redirectTo: "/dashboard" });
-  return { ok: true };
 }
 
 export async function googleSignInAction() {

@@ -31,6 +31,8 @@ type Props = {
   onScrub?: (scrub: ScrubPoint) => void;
   onRangeChange?: (range: ChartRange, first: PricePoint | undefined) => void;
   footnote?: React.ReactNode;
+  /** shown when there are fewer than two points to draw */
+  emptyMessage?: string;
   height?: number;
   ranges?: readonly ChartRange[];
 };
@@ -49,6 +51,7 @@ export function PriceChart({
   onScrub,
   onRangeChange,
   footnote,
+  emptyMessage = "Not enough data yet.",
   height = 260,
   ranges = CHART_RANGES,
 }: Props) {
@@ -157,7 +160,9 @@ export function PriceChart({
             </AreaChart>
           </ResponsiveContainer>
         ) : (
-          <div className="grid h-full place-content-center text-sm text-muted-foreground">Not enough data yet.</div>
+          <div className="grid h-full place-content-center px-6 text-center text-sm text-balance text-muted-foreground">
+            {emptyMessage}
+          </div>
         )}
         {loading && (
           <div className="absolute inset-0 animate-pulse rounded-xl bg-background/40" aria-label="Loading chart" />

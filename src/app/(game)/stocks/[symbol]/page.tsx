@@ -11,7 +11,8 @@ import { marketStatus } from "@/domain/market/status";
 import { serializeQuote } from "@/lib/serialize";
 import { serializeStatus } from "@/lib/market-status";
 import { getActivePortfolio } from "@/server/leagues/active";
-import { getHistory, getKeyStats, getQuote, usesRealQuotes } from "@/server/market";
+import type { Quote } from "@/domain/market/types";
+import { getHistory, getKeyStats, getQuote, PriceUnavailableError } from "@/server/market";
 import { requireUser } from "@/server/users";
 import { db } from "@/server/db";
 import { getTradability } from "@/server/leagues/tradability";
@@ -32,12 +33,18 @@ export default async function StockPage({ params }: PageProps<"/stocks/[symbol]"
   const def = await enrichSector(found);
 
   const portfolio = await getActivePortfolio(user.id);
-  const source = portfolio.league.marketSource;
+  const { league } = portfolio;
   const now = new Date();
-  const quote = await getQuote(def.symbol, source, now);
+  let quote: Quote | null = null;
+  try {
+    quote = await getQuote(def.symbol, now);
+  } catch (err) {
+    if (!(err instanceof PriceUnavailableError)) throw err;
+  }
+
   const [history, stats, holding, trades] = await Promise.all([
-    getHistory(def.symbol, source, "1D", now, quote),
-    getKeyStats(def.symbol, source, now),
+    getHistory(def.symbol, "1D", now, quote ?? undefined),
+    quote ? getKeyStats(quote, now) : null,
     db.holding.findUnique({ where: { portfolioId_symbol: { portfolioId: portfolio.id, symbol: def.symbol } } }),
     db.trade.findMany({
       where: { portfolioId: portfolio.id, symbol: def.symbol },
@@ -45,41 +52,58 @@ export default async function StockPage({ params }: PageProps<"/stocks/[symbol]"
       take: 10,
     }),
   ]);
-  const { league } = portfolio;
+
+  const header = (
+    <header className="flex items-center gap-3">
+      <TickerBadge symbol={def.symbol} className="size-12 text-xs" />
+      <div className="min-w-0">
+        <h1 className="truncate text-xl font-semibold tracking-tight">{def.name}</h1>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span className="font-mono font-medium text-foreground">{def.symbol}</span>
+          <span className="text-xs">{def.exchange}</span>
+          {def.sector !== UNKNOWN_SECTOR && (
+            <Badge variant="secondary" className="font-normal">
+              {def.sector}
+            </Badge>
+          )}
+          {!def.isActive && (
+            <Badge variant="destructive" className="font-normal">
+              Delisted
+            </Badge>
+          )}
+        </div>
+      </div>
+    </header>
+  );
+
+  if (!quote) {
+    return (
+      <div className="grid gap-8">
+        {header}
+        <div className="surface grid justify-items-center gap-2 p-10 text-center">
+          <p className="text-3xl">⏳</p>
+          <p className="font-medium">Live price unavailable right now</p>
+          <p className="max-w-sm text-sm text-muted-foreground">
+            Bullpen only shows real prices, and the data provider didn&apos;t return one for {def.symbol} just now
+            (usually a short rate limit). Refresh in a minute.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <LiveQuotesProvider initial={[serializeQuote(quote)]} source={source}>
+    <LiveQuotesProvider initial={[serializeQuote(quote)]}>
       <div className="grid gap-8 pb-20 lg:grid-cols-[minmax(0,1fr)_340px] lg:pb-0">
         <div className="grid min-w-0 content-start gap-8">
-          <header className="flex items-center gap-3">
-            <TickerBadge symbol={def.symbol} className="size-12 text-xs" />
-            <div className="min-w-0">
-              <h1 className="truncate text-xl font-semibold tracking-tight">{def.name}</h1>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span className="font-mono font-medium text-foreground">{def.symbol}</span>
-                <span className="text-xs">{def.exchange}</span>
-                {def.sector !== UNKNOWN_SECTOR && (
-                  <Badge variant="secondary" className="font-normal">
-                    {def.sector}
-                  </Badge>
-                )}
-                {!def.isActive && (
-                  <Badge variant="destructive" className="font-normal">
-                    Delisted
-                  </Badge>
-                )}
-              </div>
-            </div>
-          </header>
+          {header}
           <StockChart
-            key={`${def.symbol}-${source}`}
+            key={def.symbol}
             symbol={def.symbol}
             name={def.name}
-            source={source}
             initialPoints={history.points}
-            illustrative={history.illustrative}
-            status={serializeStatus(marketStatus(source, now))}
-            realQuotes={usesRealQuotes(source)}
+            historyMeta={{ source: history.source, since: history.since }}
+            status={serializeStatus(marketStatus(now))}
           />
           {holding && (
             <PositionCard
@@ -89,7 +113,7 @@ export default async function StockPage({ params }: PageProps<"/stocks/[symbol]"
               heldDays={Math.floor((now.getTime() - holding.openedAt.getTime()) / 86_400_000)}
             />
           )}
-          <KeyStats stats={stats} sector={def.sector} exchange={def.exchange} />
+          {stats && <KeyStats stats={stats} sector={def.sector} exchange={def.exchange} />}
           <section className="grid gap-3" aria-labelledby="your-trades">
             <h2 id="your-trades" className="text-lg font-semibold">
               Your {def.symbol} trades

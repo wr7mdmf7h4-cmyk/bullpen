@@ -15,7 +15,6 @@
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
-    "db:seed": "prisma db seed",
     "db:reset": "prisma migrate reset --force",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

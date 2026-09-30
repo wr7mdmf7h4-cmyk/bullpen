@@ -1,22 +1,25 @@
 import Link from "next/link";
 import { ArrowRight, BarChart3, Medal, Receipt, Smartphone, Trophy, Users } from "lucide-react";
-import { DemoButton } from "@/components/auth/auth-forms";
 import { Logo } from "@/components/brand/logo";
 import { FadeIn } from "@/components/landing/fade-in";
 import { TickerTape } from "@/components/landing/ticker-tape";
-import { Sparkline } from "@/components/market/sparkline";
+import { Delta } from "@/components/market/delta";
+import { MarketStatusPill } from "@/components/market/market-status-pill";
+import { TickerBadge } from "@/components/market/ticker-badge";
 import { Button } from "@/components/ui/button";
-import { UserAvatar } from "@/components/user-avatar";
-import { simulatedHistory } from "@/domain/market/simulated";
-import { getQuotes, usesRealQuotes } from "@/server/market";
-import { getPopularInstrument, POPULAR } from "@/domain/market/universe";
+import { formatCents } from "@/domain/money";
+import { changeBps, changeCents } from "@/domain/market/types";
+import { marketStatus } from "@/domain/market/status";
+import { POPULAR } from "@/domain/market/universe";
+import { serializeStatus } from "@/lib/market-status";
+import { getQuotes } from "@/server/market";
 import { getCurrentUser } from "@/server/users";
 
 const FEATURES = [
   {
     icon: BarChart3,
-    title: "Real stocks",
-    text: "Every US-listed stock and ETF, about 12,000 of them, from NVDA to BRK.B, with live quotes when the market's open.",
+    title: "Real stocks, real prices",
+    text: "Every US-listed stock and ETF, about 12,000 of them, from NVDA to BRK.B, at live market prices.",
   },
   {
     icon: Receipt,
@@ -26,7 +29,7 @@ const FEATURES = [
   {
     icon: Users,
     title: "Private leagues",
-    text: "Invite friends with a link. Pick live US hours or a 24/7 simulated market that never sleeps.",
+    text: "Invite friends with a link, set the dates, starting cash and fees, and see who really can pick stocks.",
   },
   {
     icon: Trophy,
@@ -45,29 +48,43 @@ const FEATURES = [
   },
 ];
 
-const PREVIEW_PLAYERS = [
-  { name: "sam", ret: "+18.42%", seed: "sam-preview" },
-  { name: "priya", ret: "+11.07%", seed: "priya-preview" },
-  { name: "jordan", ret: "+6.93%", seed: "jordan-preview" },
-];
+const HERO_SYMBOLS = ["SPY", "QQQ", "NVDA", "AAPL", "TSLA"];
 
 export default async function LandingPage() {
   const user = await getCurrentUser();
   const now = new Date();
-  // Real prices from the shared quote cache (maxFetch 0: anonymous visitors
-  // never spend API calls), falling back to the anchored simulation.
-  const quotes = [
-    ...(
-      await getQuotes(
-        POPULAR.slice(0, 24).map((d) => d.symbol),
-        usesRealQuotes("LIVE") ? "LIVE" : "SIMULATED",
-        { now, maxFetch: 0 },
-      )
-    ).values(),
-  ];
-  // Illustrative hero chart: real simulated wiggles, tilted to match the +18% headline.
-  const raw = simulatedHistory(getPopularInstrument("NVDA")!, "ALWAYS", "1M", now).map((p) => p.p);
-  const hero = raw.map((p, i) => p * (1 + (0.35 * i) / raw.length));
+  // Last real prices from the shared cache. maxFetch 0: anonymous visitors
+  // never spend data-provider calls.
+  const quotes = await getQuotes([...new Set([...HERO_SYMBOLS, ...POPULAR.slice(0, 24).map((d) => d.symbol)])], {
+    now,
+    maxFetch: 0,
+  });
+  const hero = HERO_SYMBOLS.flatMap((s) => {
+    const q = quotes.get(s);
+    return q ? [q] : [];
+  });
+  const tape = POPULAR.slice(0, 24).flatMap((d) => {
+    const q = quotes.get(d.symbol);
+    return q ? [q] : [];
+  });
+
+  const primaryCta = user ? (
+    <Button asChild size="lg" className="h-12 rounded-xl px-6 text-base font-semibold">
+      <Link href="/dashboard">
+        Go to your dashboard <ArrowRight />
+      </Link>
+    </Button>
+  ) : (
+    <Button
+      asChild
+      size="lg"
+      className="h-12 rounded-xl px-6 text-base font-semibold shadow-[0_0_40px_-8px] shadow-primary/60"
+    >
+      <Link href="/signup">
+        Start with $10,000 <ArrowRight />
+      </Link>
+    </Button>
+  );
 
   return (
     <div className="relative overflow-hidden">
@@ -115,57 +132,52 @@ export default async function LandingPage() {
               <span className="glow-gain text-primary">Real bragging rights.</span>
             </h1>
             <p className="max-w-lg text-lg text-muted-foreground">
-              Start with $10,000, trade real US stocks with realistic fees, and battle your friends up a live
-              leaderboard. No risk, all of the adrenaline.
+              Start with $10,000, trade real US stocks at live prices with realistic fees, and battle your friends up a
+              live leaderboard. No risk, all of the adrenaline.
             </p>
             <div className="flex flex-col gap-3 sm:flex-row">
-              {user ? (
-                <Button asChild size="lg" className="h-12 rounded-xl px-6 text-base font-semibold">
-                  <Link href="/dashboard">
-                    Go to your dashboard <ArrowRight />
-                  </Link>
+              {primaryCta}
+              {!user && (
+                <Button asChild size="lg" variant="outline" className="h-12 rounded-xl px-6 text-base">
+                  <Link href="/login">I have an account</Link>
                 </Button>
-              ) : (
-                <>
-                  <DemoButton className="sm:w-56">Try the demo</DemoButton>
-                  <Button asChild size="lg" variant="outline" className="h-12 rounded-xl px-6 text-base">
-                    <Link href="/signup">Create free account</Link>
-                  </Button>
-                </>
               )}
             </div>
-            <p className="text-xs text-muted-foreground">
-              No card, no email needed for the demo. Not investment advice, obviously.
-            </p>
+            <p className="text-xs text-muted-foreground">Free. No card. Not investment advice, obviously.</p>
           </FadeIn>
 
           <FadeIn delay={0.15}>
-            <div className="surface relative mx-auto grid w-full max-w-sm gap-5 p-5 shadow-[0_30px_120px_-30px] shadow-primary/30">
-              <div className="grid gap-1">
-                <span className="text-xs text-muted-foreground">Portfolio value</span>
-                <span className="num text-4xl font-semibold">$11,842.19</span>
-                <span className="num text-sm text-gain">▲ $1,842.19 (18.42%) all time</span>
+            <div className="surface relative mx-auto grid w-full max-w-sm gap-4 p-5 shadow-[0_30px_120px_-30px] shadow-primary/30">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-semibold">Live market</span>
+                <MarketStatusPill status={serializeStatus(marketStatus(now))} />
               </div>
-              <Sparkline points={hero} positive className="h-28 w-full" />
-              <div className="grid gap-2">
-                <span className="text-xs font-medium text-muted-foreground">Friday Night Traders</span>
-                {PREVIEW_PLAYERS.map((p, i) => (
-                  <div key={p.name} className="flex items-center gap-3 rounded-xl bg-background/50 px-3 py-2">
-                    <span className="w-5 text-center">{["🥇", "🥈", "🥉"][i]}</span>
-                    <UserAvatar seed={p.seed} className="size-7" />
-                    <span className="flex-1 text-sm font-medium">{p.name}</span>
-                    <span className="num text-sm font-semibold text-gain">{p.ret}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="absolute -right-3 -bottom-4 rotate-3 rounded-2xl border border-gold/40 bg-popover px-3 py-2 text-sm shadow-xl">
-                💎 <span className="font-semibold">Diamond Hands</span> unlocked
-              </div>
+              {hero.length ? (
+                <ul className="grid gap-2">
+                  {hero.map((q) => (
+                    <li key={q.symbol} className="flex items-center gap-3 rounded-xl bg-background/50 px-3 py-2">
+                      <TickerBadge symbol={q.symbol} className="size-8 text-[10px]" />
+                      <span className="flex-1 font-mono text-sm font-semibold">{q.symbol}</span>
+                      <span className="grid justify-items-end">
+                        <span className="num text-sm font-semibold">{formatCents(q.priceCents)}</span>
+                        <Delta bps={changeBps(q)} cents={changeCents(q)} showCents={false} size="xs" />
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="rounded-xl bg-background/50 p-4 text-sm text-muted-foreground">
+                  Live prices appear here once the market data warms up.
+                </p>
+              )}
+              <p className="text-[11px] text-muted-foreground">
+                Real US market prices. Trade them with $10,000 of fake money.
+              </p>
             </div>
           </FadeIn>
         </section>
 
-        <TickerTape quotes={quotes} />
+        {tape.length >= 6 && <TickerTape quotes={tape} />}
 
         <section className="mx-auto grid max-w-6xl gap-10 px-4 py-20 sm:px-6">
           <FadeIn className="grid max-w-2xl gap-3">
@@ -200,15 +212,7 @@ export default async function LandingPage() {
                 Think you can beat the market?
               </h2>
               <p className="relative text-muted-foreground">Prove it to your friends. It takes ten seconds.</p>
-              <div className="relative mx-auto w-full max-w-xs">
-                {user ? (
-                  <Button asChild size="lg" className="h-12 w-full rounded-xl text-base font-semibold">
-                    <Link href="/dashboard">Open Bullpen</Link>
-                  </Button>
-                ) : (
-                  <DemoButton>Try the demo</DemoButton>
-                )}
-              </div>
+              <div className="relative mx-auto">{primaryCta}</div>
             </div>
           </FadeIn>
         </section>
@@ -217,7 +221,7 @@ export default async function LandingPage() {
       <footer className="border-t">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-4 py-8 text-sm text-muted-foreground sm:flex-row sm:px-6">
           <Logo className="text-foreground" />
-          <p>Paper trading for fun. Prices may be simulated or delayed. Not financial advice.</p>
+          <p>Paper trading for fun with real market prices. Not financial advice.</p>
         </div>
       </footer>
     </div>

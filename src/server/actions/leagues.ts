@@ -7,9 +7,11 @@ import { z } from "zod";
 import { db } from "../db";
 import { evaluateAchievements } from "../achievements";
 import { invalidateLeaderboard } from "../leaderboard";
+import { notifyLeague } from "../realtime";
 import { ACTIVE_LEAGUE_COOKIE } from "../leagues/active";
+import { SYSTEM_LEAGUES } from "@/domain/leagues";
 import { LeagueFullError } from "../leagues/membership";
-import { createLeague, joinByInvite, JoinError } from "../leagues/service";
+import { createLeague, joinByInvite, JoinError, leaveLeague, LeaveError } from "../leagues/service";
 import { rateLimit } from "../rate-limit";
 import { requireUser } from "../users";
 import { createLeagueSchema, inviteCodeSchema, type ActionResult } from "@/lib/validators";
@@ -74,4 +76,27 @@ export async function joinLeagueAction(_prev: ActionResult | undefined, formData
   invalidateLeaderboard(leagueId);
   await setActiveLeagueCookie(leagueId);
   redirect(`/leagues/${leagueId}?joined=1`);
+}
+
+export async function leaveLeagueAction(leagueId: string): Promise<ActionResult> {
+  const user = await requireUser();
+  const limit = await rateLimit("leagueWrite", user.id);
+  if (!limit.ok) return { ok: false, error: `Slow down. Try again in ${limit.retryAfterSeconds}s.` };
+
+  const id = z.string().min(1).max(40).parse(leagueId);
+  let deletedLeague = false;
+  try {
+    ({ deletedLeague } = await leaveLeague(user.id, id));
+  } catch (err) {
+    if (err instanceof LeaveError) return { ok: false, error: err.message };
+    throw err;
+  }
+  if (!deletedLeague) {
+    invalidateLeaderboard(id);
+    await notifyLeague(id, "leaderboard");
+  }
+  const jar = await cookies();
+  if (jar.get(ACTIVE_LEAGUE_COOKIE)?.value === id) await setActiveLeagueCookie(SYSTEM_LEAGUES.global.id);
+  revalidatePath("/", "layout");
+  redirect("/leagues?left=1");
 }

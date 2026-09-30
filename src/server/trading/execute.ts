@@ -1,7 +1,7 @@
 import "server-only";
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "../db";
-import { getQuote, usesRealQuotes } from "../market";
+import { getQuote, PriceUnavailableError, usesRealQuotes } from "../market";
 import { findInstrument } from "../instruments";
 import { ensureReferenceData } from "../reference-data";
 import { leagueStatus, formatDuration } from "@/domain/leagues";
@@ -106,7 +106,7 @@ export async function executeTrade(req: TradeRequest): Promise<TradeResult> {
   }
   if (status === "ENDED") throw new TradeError("LEAGUE_ENDED", "This league has ended. Final standings are locked in.");
 
-  const market = marketStatus(league.marketSource, now);
+  const market = marketStatus(now);
   const closedMessage = marketClosedMessage(market, now);
   if (closedMessage) {
     throw new TradeError("MARKET_CLOSED", closedMessage, {
@@ -120,10 +120,14 @@ export async function executeTrade(req: TradeRequest): Promise<TradeResult> {
     throw new TradeError("NOT_TRADABLE", `${instrument.symbol} is no longer listed and can't be traded.`);
   }
 
-  const quote = await getQuote(instrument.symbol, league.marketSource, now);
-  // With real quotes on, never fill at a made-up or stale price: an obscure
-  // ticker falling back to the simulation would otherwise be free money.
-  if (!isExecutableQuote(quote, { realQuotes: usesRealQuotes(league.marketSource), now })) {
+  const quote = await getQuote(instrument.symbol, now).catch((err: unknown) => {
+    if (err instanceof PriceUnavailableError) {
+      throw new TradeError("PRICE_UNAVAILABLE", `We couldn't get a live price for ${instrument.symbol} right now.`);
+    }
+    throw err;
+  });
+  // Never fill at a stale price: only a fresh quote from the provider counts.
+  if (!isExecutableQuote(quote, { realQuotes: usesRealQuotes(), now })) {
     throw new TradeError(
       "PRICE_UNAVAILABLE",
       `We couldn't get a live price for ${instrument.symbol} right now. Please try again in a minute.`,

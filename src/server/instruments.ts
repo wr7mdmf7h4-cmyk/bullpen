@@ -3,7 +3,13 @@ import { db } from "./db";
 import { env } from "./env";
 import { ensureReferenceData } from "./reference-data";
 import { fetchProfile } from "./market/finnhub";
-import { rankSearch, simulationProfile, UNKNOWN_SECTOR, type InstrumentDef } from "@/domain/market/universe";
+import {
+  getPopularInstrument,
+  rankSearch,
+  simulationProfile,
+  UNKNOWN_SECTOR,
+  type InstrumentDef,
+} from "@/domain/market/universe";
 import { sectorFromIndustry } from "@/domain/market/sectors";
 
 /**
@@ -28,13 +34,12 @@ async function load(): Promise<Map<string, Instrument>> {
       isEtf: true,
       isPopular: true,
       isActive: true,
-      basePriceCents: true,
-      volBps: true,
     },
   });
   const bySymbol = new Map<string, Instrument>();
   for (const r of rows) {
-    const profile = simulationProfile(r.symbol, r.isEtf);
+    // basePrice/vol only drive the dev-only fake market (FAKE_MARKET_DATA=1).
+    const profile = getPopularInstrument(r.symbol) ?? simulationProfile(r.symbol, r.isEtf);
     bySymbol.set(r.symbol, {
       symbol: r.symbol,
       name: r.name,
@@ -43,8 +48,8 @@ async function load(): Promise<Map<string, Instrument>> {
       isEtf: r.isEtf,
       isPopular: r.isPopular,
       isActive: r.isActive,
-      basePrice: r.basePriceCents !== null ? r.basePriceCents / 100 : profile.basePrice,
-      vol: r.volBps !== null ? r.volBps / 10_000 : profile.vol,
+      basePrice: profile.basePrice,
+      vol: profile.vol,
     });
   }
   cache = { at: Date.now(), bySymbol };

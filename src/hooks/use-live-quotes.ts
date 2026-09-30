@@ -5,20 +5,20 @@ import type { QuoteDTO } from "@/lib/serialize";
 
 /**
  * Keeps a set of quotes fresh by polling /api/quotes. Pauses while the tab is
- * hidden. Simulated prices tick every 5s; live quotes are cached ~60s upstream.
+ * hidden. Quotes are cached ~60s upstream, so polling every 30s is plenty.
  */
 function toRecord(list: QuoteDTO[]) {
   return Object.fromEntries(list.map((q) => [q.symbol, q]));
 }
 
-export function useLiveQuotes(initial: QuoteDTO[], source: "LIVE" | "SIMULATED", enabled = true) {
+export function useLiveQuotes(initial: QuoteDTO[], enabled = true) {
   const [quotes, setQuotes] = useState<Record<string, QuoteDTO>>(() => toRecord(initial));
-  // Fresh server data (router.refresh after a trade, or a league switch that
-  // changes the market source) replaces whatever we were holding. Done during
-  // render so there is never a frame of stale prices.
-  const [seen, setSeen] = useState({ initial, source });
-  if (seen.initial !== initial || seen.source !== source) {
-    setSeen({ initial, source });
+  // Fresh server data (router.refresh after a trade or a league switch)
+  // replaces whatever we were holding. Done during render so there is never a
+  // frame of stale prices.
+  const [seen, setSeen] = useState(initial);
+  if (seen !== initial) {
+    setSeen(initial);
     setQuotes(toRecord(initial));
   }
   const symbols = useMemo(
@@ -29,7 +29,7 @@ export function useLiveQuotes(initial: QuoteDTO[], source: "LIVE" | "SIMULATED",
         .join(","),
     [initial],
   );
-  const intervalMs = source === "SIMULATED" ? 5_000 : 30_000; // live quotes are cached ~60s upstream
+  const intervalMs = 30_000; // real quotes are cached ~60s upstream
 
   useEffect(() => {
     if (!enabled || !symbols) return;
@@ -41,7 +41,7 @@ export function useLiveQuotes(initial: QuoteDTO[], source: "LIVE" | "SIMULATED",
       controller?.abort();
       controller = new AbortController();
       try {
-        const res = await fetch(`/api/quotes?source=${source}&symbols=${symbols}`, { signal: controller.signal });
+        const res = await fetch(`/api/quotes?symbols=${symbols}`, { signal: controller.signal });
         if (!res.ok) return;
         const body = (await res.json()) as { quotes: QuoteDTO[] };
         if (!cancelled) {
@@ -65,7 +65,7 @@ export function useLiveQuotes(initial: QuoteDTO[], source: "LIVE" | "SIMULATED",
       clearInterval(id);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [symbols, source, intervalMs, enabled]);
+  }, [symbols, intervalMs, enabled]);
 
   return quotes;
 }

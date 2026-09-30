@@ -2,17 +2,11 @@
 
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  chooseUsernameAction,
-  demoLoginAction,
-  googleSignInAction,
-  logInAction,
-  signUpAction,
-} from "@/server/actions/auth";
+import { chooseUsernameAction, googleSignInAction, logInAction, signUpAction } from "@/server/actions/auth";
 import type { ActionResult } from "@/lib/validators";
 import { cn } from "@/lib/utils";
 
@@ -134,18 +128,6 @@ export function UsernameForm() {
       <Field name="username" label="Username" autoComplete="username" required autoFocus error={errors.username} />
       <FormError state={state} />
       <SubmitButton>Let&apos;s trade</SubmitButton>
-    </form>
-  );
-}
-
-export function DemoButton({ className, children }: { className?: string; children?: React.ReactNode }) {
-  const [state, action] = useActionState(demoLoginAction, undefined);
-  return (
-    <form action={action} className={className}>
-      <SubmitButton className="h-12 shadow-[0_0_40px_-8px] shadow-primary/60">
-        <Sparkles /> {children ?? "Try the demo"}
-      </SubmitButton>
-      <FormError state={state} />
     </form>
   );
 }

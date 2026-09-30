@@ -1,5 +1,13 @@
-import { hashString } from "@/domain/market/simulated";
 import { cn } from "@/lib/utils";
+
+function hashString(s: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
 
 /** Deterministic coloured monogram (no third-party logo API needed). */
 export function TickerBadge({ symbol, className }: { symbol: string; className?: string }) {

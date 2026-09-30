@@ -1,25 +1,17 @@
 /** League rules: pure functions, no I/O. */
 
-export type MarketSourceKind = "LIVE" | "SIMULATED";
-export type LeagueKindName = "GLOBAL" | "PRACTICE" | "PRIVATE";
+export type LeagueKindName = "GLOBAL" | "PRIVATE";
 
 export const DEFAULT_STARTING_CASH_CENTS = 1_000_000; // $10,000
 export const DEFAULT_FEE_FLAT_CENTS = 100; // $1.00
 export const DEFAULT_FEE_BPS = 10; // 0.10%
 
-/** System leagues have fixed ids so they can be upserted idempotently. */
+/** The Global league has a fixed id so it can be upserted idempotently. */
 export const SYSTEM_LEAGUES = {
   global: {
     id: "global",
     kind: "GLOBAL" as const,
     name: "Global League",
-    marketSource: "LIVE" as const,
-  },
-  practice: {
-    id: "practice",
-    kind: "PRACTICE" as const,
-    name: "24/7 Practice",
-    marketSource: "SIMULATED" as const,
   },
 };
 

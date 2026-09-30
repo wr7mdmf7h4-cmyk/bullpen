@@ -130,3 +130,38 @@ export async function fetchProfile(
   const p = profileSchema.parse(await get(`/stock/profile2?symbol=${encodeURIComponent(symbol)}`, apiKey, "bulk"));
   return { industry: p.finnhubIndustry ?? null, name: p.name ?? null };
 }
+
+const candleSchema = z.object({
+  s: z.string(),
+  t: z.array(z.number()).optional(),
+  c: z.array(z.number()).optional(),
+});
+
+export class CandlesNotIncluded extends Error {}
+
+/**
+ * Historical candles. Premium-only on current Finnhub plans (free keys get
+ * HTTP 403), so callers treat CandlesNotIncluded as "use recorded history".
+ */
+export async function fetchCandles(
+  symbol: string,
+  resolution: string,
+  fromSec: number,
+  toSec: number,
+  apiKey: string,
+): Promise<{ t: number; p: number }[]> {
+  let raw: unknown;
+  try {
+    raw = await get(
+      `/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=${resolution}&from=${fromSec}&to=${toSec}`,
+      apiKey,
+      "bulk",
+    );
+  } catch (err) {
+    if (err instanceof FinnhubUnavailable && /HTTP (401|403)/.test(err.message)) throw new CandlesNotIncluded();
+    throw err;
+  }
+  const data = candleSchema.parse(raw);
+  if (data.s !== "ok" || !data.t || !data.c) return [];
+  return data.t.map((t, i) => ({ t: t * 1000, p: Math.round(data.c![i]! * 100) })).filter((pt) => pt.p > 0);
+}

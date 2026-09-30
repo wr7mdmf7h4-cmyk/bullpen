@@ -40,7 +40,7 @@ export async function getLeaderboard(leagueId: string, now = new Date()): Promis
     where: { leagueId, user: { username: { not: null } } },
     include: {
       holdings: { select: { symbol: true, quantity: true, costBasisCents: true } },
-      league: { select: { marketSource: true, startingCashCents: true } },
+      league: { select: { startingCashCents: true } },
       user: { select: { id: true, username: true, avatarSeed: true } },
     },
   });

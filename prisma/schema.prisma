@@ -26,7 +26,6 @@ model User {
   /// seed for the generated DiceBear avatar
   avatarSeed   String
   bio          String?
-  isDemo       Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -40,23 +39,14 @@ model User {
 
 enum LeagueKind {
   GLOBAL
-  PRACTICE
   PRIVATE
-}
-
-enum MarketSource {
-  /// real quotes (Finnhub) when configured, US market hours enforced
-  LIVE
-  /// deterministic simulated market, always open
-  SIMULATED
 }
 
 model League {
   id                String       @id @default(cuid())
   kind              LeagueKind   @default(PRIVATE)
-  marketSource      MarketSource @default(LIVE)
   name              String
-  /// null for system leagues (Global, Practice)
+  /// null for the Global league
   inviteCode        String?      @unique
   ownerId           String?
   owner             User?        @relation("LeagueOwner", fields: [ownerId], references: [id], onDelete: SetNull)
@@ -175,16 +165,26 @@ model Instrument {
   isPopular      Boolean   @default(false)
   /// false once a symbol disappears from the exchange directory (delisted)
   isActive       Boolean   @default(true)
-  /// simulated-market anchor; null = derived deterministically from the symbol
-  basePriceCents Int?
-  /// simulated-market annualised volatility in bps; null = derived
-  volBps         Int?
   syncedAt       DateTime?
 
   holdings Holding[]
   trades   Trade[]
+  prices   PriceSample[]
 
   @@index([isPopular])
+}
+
+/// Real prices observed from the data provider, recorded as we see them
+/// (every live quote, previous closes, and a daily close job). Charts are
+/// drawn only from these, so history fills in over time.
+model PriceSample {
+  symbol     String
+  takenAt    DateTime
+  priceCents Int
+
+  instrument Instrument @relation(fields: [symbol], references: [symbol], onDelete: Cascade)
+
+  @@id([symbol, takenAt])
 }
 
 /// Last known live quote per symbol. Survives restarts so portfolios can be
@@ -228,14 +228,4 @@ model ActivityEvent {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([leagueId, createdAt(sort: Desc)])
-}
-
-// ─────────────────────────── App metadata ───────────────────────────
-
-/// Small key/value store for app-level bookkeeping (e.g. which version of
-/// the demo world has been seeded).
-model AppSetting {
-  key       String   @id
-  value     String
-  updatedAt DateTime @updatedAt
 }

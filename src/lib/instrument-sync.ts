@@ -65,13 +65,7 @@ export async function syncInstruments(db: PrismaClient, opts: { log?: (msg: stri
     await db.instrument
       .update({
         where: { symbol: p.symbol },
-        data: {
-          isPopular: true,
-          name: p.name,
-          sector: p.sector,
-          basePriceCents: Math.round(p.basePrice * 100),
-          volBps: Math.round(p.vol * 10_000),
-        },
+        data: { isPopular: true, name: p.name, sector: p.sector },
       })
       .catch(() => undefined); // a popular symbol missing from the directory is left as-is
   }

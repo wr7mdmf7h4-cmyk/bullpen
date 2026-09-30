@@ -54,7 +54,6 @@ export const tradeSchema = z.object({
 export const createLeagueSchema = z
   .object({
     name: z.string().trim().min(3, "At least 3 characters").max(40, "At most 40 characters"),
-    marketSource: z.enum(["LIVE", "SIMULATED"]),
     startsAt: z.coerce.date(),
     endsAt: z.coerce.date(),
     startingCashDollars: z.coerce.number().int().min(1_000, "At least $1,000").max(1_000_000, "At most $1,000,000"),

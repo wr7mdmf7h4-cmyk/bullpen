@@ -16,7 +16,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createLeagueAction, joinLeagueAction } from "@/server/actions/leagues";
 import type { ActionResult } from "@/lib/validators";
-import { cn } from "@/lib/utils";
 
 function Submit({ children }: { children: React.ReactNode }) {
   const { pending } = useFormStatus();
@@ -65,7 +64,6 @@ export function CreateLeagueDialog() {
     start.setSeconds(0, 0);
     return { start: toLocalInput(start), end: toLocalInput(new Date(start.getTime() + 14 * 86_400_000)) };
   });
-  const [source, setSource] = useState<"LIVE" | "SIMULATED">("SIMULATED");
 
   return (
     <Dialog>
@@ -103,32 +101,9 @@ export function CreateLeagueDialog() {
             {errors.name && <p className="text-xs text-loss">{errors.name[0]}</p>}
           </div>
 
-          <fieldset className="grid gap-1.5">
-            <legend className="mb-1.5 text-sm font-medium">Market</legend>
-            <input type="hidden" name="marketSource" value={source} />
-            <div className="grid grid-cols-2 gap-2">
-              {(
-                [
-                  ["SIMULATED", "24/7 Simulated", "Always open. Great for friends in any timezone."],
-                  ["LIVE", "Live US market", "Real quotes, NYSE hours only."],
-                ] as const
-              ).map(([value, title, desc]) => (
-                <button
-                  type="button"
-                  key={value}
-                  onClick={() => setSource(value)}
-                  aria-pressed={source === value}
-                  className={cn(
-                    "grid gap-0.5 rounded-xl border p-3 text-left transition-colors",
-                    source === value ? "border-primary/60 bg-primary/10" : "hover:bg-accent/50",
-                  )}
-                >
-                  <span className="text-sm font-semibold">{title}</span>
-                  <span className="text-xs text-muted-foreground">{desc}</span>
-                </button>
-              ))}
-            </div>
-          </fieldset>
+          <p className="-mt-1 rounded-xl border bg-background/40 px-3 py-2 text-xs text-muted-foreground">
+            Real US market: live prices, trading 9:30am–4pm ET on weekdays.
+          </p>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">

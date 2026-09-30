@@ -1,17 +1,10 @@
-import type { MarketSourceKind } from "../leagues";
 import { formatDuration } from "../leagues";
 import { getMarketHours } from "./hours";
-import type { MarketCalendar } from "./simulated";
 
-export function calendarFor(source: MarketSourceKind): MarketCalendar {
-  return source === "LIVE" ? "NYSE" : "ALWAYS";
-}
+/** Every league trades the real US market, so its hours apply everywhere. */
+export type MarketStatus = { state: "OPEN"; closesAt: Date } | { state: "CLOSED"; opensAt: Date };
 
-export type MarketStatus =
-  { state: "ALWAYS_OPEN" } | { state: "OPEN"; closesAt: Date } | { state: "CLOSED"; opensAt: Date };
-
-export function marketStatus(source: MarketSourceKind, now: Date): MarketStatus {
-  if (source === "SIMULATED") return { state: "ALWAYS_OPEN" };
+export function marketStatus(now: Date): MarketStatus {
   const hours = getMarketHours(now);
   return hours.isOpen && hours.session
     ? { state: "OPEN", closesAt: hours.session.close }
@@ -19,7 +12,7 @@ export function marketStatus(source: MarketSourceKind, now: Date): MarketStatus 
 }
 
 export function canTradeNow(status: MarketStatus): boolean {
-  return status.state !== "CLOSED";
+  return status.state === "OPEN";
 }
 
 export function marketClosedMessage(status: MarketStatus, now: Date): string | null {

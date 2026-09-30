@@ -7,16 +7,8 @@ import type { QuoteDTO } from "@/lib/serialize";
 const LiveQuotesContext = createContext<Record<string, QuoteDTO> | null>(null);
 
 /** Shares one polling loop between everything on a page that shows a price. */
-export function LiveQuotesProvider({
-  initial,
-  source,
-  children,
-}: {
-  initial: QuoteDTO[];
-  source: "LIVE" | "SIMULATED";
-  children: React.ReactNode;
-}) {
-  const quotes = useLiveQuotes(initial, source);
+export function LiveQuotesProvider({ initial, children }: { initial: QuoteDTO[]; children: React.ReactNode }) {
+  const quotes = useLiveQuotes(initial);
   return <LiveQuotesContext.Provider value={quotes}>{children}</LiveQuotesContext.Provider>;
 }
 

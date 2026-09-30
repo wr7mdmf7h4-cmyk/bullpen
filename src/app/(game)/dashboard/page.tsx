@@ -49,17 +49,9 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
         <h1 className="text-3xl font-semibold tracking-tight">@{user.username}</h1>
         {welcome && (
           <p className="mt-3 rounded-2xl border border-primary/25 bg-primary/5 p-4 text-sm">
-            🎉 Welcome to the pen! You have <strong>$10,000</strong> in the Global League (real US market hours) and
-            another <strong>$10,000</strong> in 24/7 Practice. Switch leagues from the menu at the top.
-          </p>
-        )}
-        {user.isDemo && (
-          <p className="mt-3 rounded-2xl border bg-card p-4 text-sm text-muted-foreground">
-            You&apos;re on the shared demo account, so other visitors trade here too.{" "}
-            <Link href="/signup" className="font-medium text-foreground underline underline-offset-4">
-              Create your own account
-            </Link>{" "}
-            to keep your gains.
+            🎉 Welcome to the pen! You have <strong>$10,000</strong> in the Global League. Prices are real, so you can
+            trade while the US market is open (9:30am–4pm ET, weekdays). Create or join a private league to take on your
+            friends.
           </p>
         )}
       </header>

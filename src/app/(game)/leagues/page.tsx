@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ChevronRight, Globe, Timer, Users } from "lucide-react";
+import { ChevronRight, Globe, Users } from "lucide-react";
 import { CreateLeagueDialog, JoinLeagueForm } from "@/components/league/league-forms";
-import { LeagueStatusBadge, MarketSourceBadge } from "@/components/league/league-status";
+import { LeagueStatusBadge } from "@/components/league/league-status";
 import { formatBps } from "@/domain/money";
 import { getLeaderboard } from "@/server/leaderboard";
 import { listMyLeagues } from "@/server/leagues/service";
@@ -11,10 +11,11 @@ import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Leagues" };
 
-const ICONS = { GLOBAL: Globe, PRACTICE: Timer, PRIVATE: Users };
+const ICONS = { GLOBAL: Globe, PRIVATE: Users };
 
-export default async function LeaguesPage() {
+export default async function LeaguesPage({ searchParams }: PageProps<"/leagues">) {
   const user = await requireUser();
+  const { left } = await searchParams;
   const now = new Date();
   const mine = await listMyLeagues(user.id);
   const boards = await Promise.all(mine.map((p) => getLeaderboard(p.leagueId, now)));
@@ -28,6 +29,12 @@ export default async function LeaguesPage() {
         </div>
         <CreateLeagueDialog />
       </header>
+
+      {left && (
+        <p role="status" className="rounded-2xl border bg-card p-4 text-sm text-muted-foreground">
+          You left the league. Your portfolio there has been removed.
+        </p>
+      )}
 
       <section className="surface grid gap-3 p-4 sm:grid-cols-[1fr_minmax(0,22rem)] sm:items-center">
         <div>
@@ -54,7 +61,6 @@ export default async function LeaguesPage() {
                   <div className="min-w-0 flex-1">
                     <h2 className="truncate font-semibold">{p.league.name}</h2>
                     <div className="mt-1 flex flex-wrap gap-1.5">
-                      <MarketSourceBadge source={p.league.marketSource} />
                       <LeagueStatusBadge league={p.league} now={now} />
                     </div>
                   </div>
