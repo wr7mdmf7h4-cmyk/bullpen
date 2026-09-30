@@ -11,7 +11,7 @@ A multiplayer paper-trading game: everyone starts with $10,000, trades real US s
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)
 ![Postgres](https://img.shields.io/badge/Postgres-Neon-4169e1)
 
-**[Live demo →](https://YOUR-DEPLOYMENT.vercel.app)** · one click on _Try the demo_, no sign-up
+**[Live demo →](https://bullpen.site)** · one click on _Try the demo_, no sign-up
 
 </div>
 
@@ -207,6 +207,7 @@ The fallback market isn't a random number generator with state. A price is a **p
 - any historical point costs O(1), so charts, seeded history and 52-week ranges come for free;
 - prices move in 5-second ticks, so the price you confirm is the price you get;
 - for LIVE leagues without an API key the same simulation runs on the **real NYSE calendar**: prices freeze outside market hours.
+- **anchored to reality:** whenever a real quote has been seen, the simulation is re-based so it passes exactly through that price (`anchorInstrument`; scaling the base price keeps every relative move identical). The 24/7 leagues therefore trade at real price levels, with only the moves between real quotes simulated. The demo world is seeded on the same anchored prices, and a `seedVersion` setting lets a deploy re-seed it when that logic changes.
 
 ### Graceful fallbacks for everything optional
 

@@ -12,13 +12,13 @@
  * league. Real users are never touched.
  *
  *   npm run db:seed              # (re)create the demo world
- *   tsx prisma/seed.ts --if-empty  # only if it doesn't exist yet (used by the Vercel build)
+ *   tsx prisma/seed.ts --if-outdated  # only if missing or older than SEED_VERSION (Vercel build)
  */
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
-import { POPULAR, getPopularInstrument, type InstrumentDef } from "../src/domain/market/universe";
-import { simulatedPriceCents, simulatedQuote } from "../src/domain/market/simulated";
+import { POPULAR, type InstrumentDef } from "../src/domain/market/universe";
+import { anchorInstrument, simulatedPriceCents, simulatedQuote } from "../src/domain/market/simulated";
 import { isMarketOpen } from "../src/domain/market/hours";
 import { calendarFor } from "../src/domain/market/status";
 import { applyBuy, applySell, validateOrder, type Position } from "../src/domain/trading";
@@ -42,7 +42,14 @@ const db = new PrismaClient({
     ),
   }),
 });
-const IF_EMPTY = process.argv.includes("--if-empty");
+const IF_OUTDATED = process.argv.includes("--if-outdated");
+/** Bump to re-seed the demo world on the next deploy (see scripts/vercel-build.sh). */
+const SEED_VERSION = "2"; // v2: demo history priced from real (anchored) price levels
+
+// Popular instruments anchored to their last real price (from QuoteCache) so
+// seeded trades happen at realistic price levels. Filled in main().
+let DEFS = new Map<string, InstrumentDef>(POPULAR.map((d) => [d.symbol, d]));
+const defOf = (symbol: string) => DEFS.get(symbol)!;
 
 const DAY = 86_400_000;
 const BOT_DOMAIN = "bots.bullpen.dev";
@@ -168,17 +175,28 @@ function randomTimes(from: number, to: number, n: number, source: "LIVE" | "SIMU
 }
 
 function candidateSymbols(persona: Persona): InstrumentDef[] {
-  const preferred = POPULAR.filter((i) => persona.sectors.includes(i.sector));
-  return rng() < 0.75 && preferred.length ? preferred : [...POPULAR];
+  const all = [...DEFS.values()];
+  const preferred = all.filter((i) => persona.sectors.includes(i.sector));
+  return rng() < 0.75 && preferred.length ? preferred : all;
 }
 
 async function main() {
   const now = new Date();
-  if (IF_EMPTY && (await db.user.findUnique({ where: { email: DEMO_EMAIL }, select: { id: true } }))) {
-    console.log("🌱 Demo world already exists, skipping seed (--if-empty)");
+  const seeded = await db.appSetting.findUnique({ where: { key: "seedVersion" } });
+  if (IF_OUTDATED && seeded?.value === SEED_VERSION) {
+    console.log(`🌱 Demo world is up to date (v${SEED_VERSION}), skipping seed`);
     return;
   }
   console.log("🌱 Seeding Bullpen…");
+
+  const cached = await db.quoteCache.findMany({ where: { symbol: { in: POPULAR.map((p) => p.symbol) } } });
+  DEFS = new Map(
+    POPULAR.map((d) => {
+      const q = cached.find((c) => c.symbol === d.symbol);
+      return [d.symbol, q ? anchorInstrument(d, { priceCents: q.priceCents, at: q.fetchedAt.getTime() }) : d];
+    }),
+  );
+  console.log(`   ${cached.length}/${POPULAR.length} popular stocks anchored to real prices`);
 
   // ── reference data ───────────────────────────────────────────────────────
   await db.instrument.createMany({
@@ -306,7 +324,7 @@ async function main() {
         } else {
           const symbol = pick(sellable);
           const pos = positions.get(symbol)!;
-          const price = simulatedPriceCents(getPopularInstrument(symbol)!, t);
+          const price = simulatedPriceCents(defOf(symbol), t);
           const quantity = rng() < 0.6 ? pos.quantity : Math.max(1, Math.floor(pos.quantity * rng()));
           const check = validateOrder({
             side,
@@ -409,7 +427,7 @@ async function main() {
           }
         }
         const prices = new Map(
-          [...held.keys()].map((s) => [s, simulatedQuote(getPopularInstrument(s)!, calendar, new Date(at)).priceCents]),
+          [...held.keys()].map((s) => [s, simulatedQuote(defOf(s), calendar, new Date(at)).priceCents]),
         );
         const v = valuePortfolio(
           c,
@@ -480,9 +498,7 @@ async function main() {
       maxSectorsHeld: Math.max(
         0,
         ...finalStates.map(
-          (s) =>
-            new Set([...s.positions.keys()].map((k) => getPopularInstrument(k)!.sector).filter((x) => x !== "ETF"))
-              .size,
+          (s) => new Set([...s.positions.keys()].map((k) => defOf(k).sector).filter((x) => x !== "ETF")).size,
         ),
       ),
       oldestOpenPositionAt: (() => {
@@ -493,10 +509,7 @@ async function main() {
       bestReturnBps: Math.max(
         ...finalStates.map((s) => {
           const prices = new Map(
-            [...s.positions.keys()].map((k) => [
-              k,
-              simulatedQuote(getPopularInstrument(k)!, calendarFor(s.source), now).priceCents,
-            ]),
+            [...s.positions.keys()].map((k) => [k, simulatedQuote(defOf(k), calendarFor(s.source), now).priceCents]),
           );
           const v = valuePortfolio(
             s.cash,
@@ -533,6 +546,11 @@ async function main() {
   console.log(
     `✅ Seeded ${PERSONAS.length} players, ${tradeTotal} trades. Demo league invite code: ${DEMO_LEAGUE_CODE}`,
   );
+  await db.appSetting.upsert({
+    where: { key: "seedVersion" },
+    create: { key: "seedVersion", value: SEED_VERSION },
+    update: { value: SEED_VERSION },
+  });
 }
 
 main()

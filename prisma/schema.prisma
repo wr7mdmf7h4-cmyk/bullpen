@@ -229,3 +229,13 @@ model ActivityEvent {
 
   @@index([leagueId, createdAt(sort: Desc)])
 }
+
+// ─────────────────────────── App metadata ───────────────────────────
+
+/// Small key/value store for app-level bookkeeping (e.g. which version of
+/// the demo world has been seeded).
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}

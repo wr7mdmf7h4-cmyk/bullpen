@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { getPopularInstrument, POPULAR } from "./universe";
-import { effectiveTime, simulatedHistory, simulatedPriceCents, simulatedQuote, TICK_MS } from "./simulated";
+import {
+  anchorInstrument,
+  effectiveTime,
+  simulatedHistory,
+  simulatedPriceCents,
+  simulatedQuote,
+  TICK_MS,
+} from "./simulated";
 
 const nvda = getPopularInstrument("NVDA")!;
 const t0 = Date.UTC(2026, 5, 15, 15, 0, 0);
@@ -63,5 +70,28 @@ describe("simulated market", () => {
         expect(pts.every((pt, i) => i === 0 || pt.t > pts[i - 1]!.t)).toBe(true);
       }
     }
+  });
+});
+
+describe("anchorInstrument", () => {
+  const anchorAt = Date.UTC(2026, 8, 30, 14, 0, 0);
+
+  it("passes exactly through the real price at the anchor time", () => {
+    for (const real of [60_304, 18_948, 2_476, 91_952]) {
+      const anchored = anchorInstrument(nvda, { priceCents: real, at: anchorAt });
+      expect(Math.abs(simulatedPriceCents(anchored, anchorAt) - real)).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("keeps the shape: relative moves are unchanged", () => {
+    const anchored = anchorInstrument(nvda, { priceCents: 60_304, at: anchorAt });
+    const later = anchorAt + 3 * 3_600_000;
+    const raw = simulatedPriceCents(nvda, later) / simulatedPriceCents(nvda, anchorAt);
+    const moved = simulatedPriceCents(anchored, later) / simulatedPriceCents(anchored, anchorAt);
+    expect(moved).toBeCloseTo(raw, 3);
+  });
+
+  it("ignores nonsense anchors", () => {
+    expect(anchorInstrument(nvda, { priceCents: 0, at: anchorAt })).toBe(nvda);
   });
 });

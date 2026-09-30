@@ -7,7 +7,8 @@ import { TickerTape } from "@/components/landing/ticker-tape";
 import { Sparkline } from "@/components/market/sparkline";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
-import { simulatedHistory, simulatedQuote } from "@/domain/market/simulated";
+import { simulatedHistory } from "@/domain/market/simulated";
+import { getQuotes, usesRealQuotes } from "@/server/market";
 import { getPopularInstrument, POPULAR } from "@/domain/market/universe";
 import { getCurrentUser } from "@/server/users";
 
@@ -53,8 +54,17 @@ const PREVIEW_PLAYERS = [
 export default async function LandingPage() {
   const user = await getCurrentUser();
   const now = new Date();
-  // The ticker uses the deterministic simulation: no API key or DB round trip needed.
-  const quotes = POPULAR.slice(0, 24).map((d) => simulatedQuote(d, "ALWAYS", now));
+  // Real prices from the shared quote cache (maxFetch 0: anonymous visitors
+  // never spend API calls), falling back to the anchored simulation.
+  const quotes = [
+    ...(
+      await getQuotes(
+        POPULAR.slice(0, 24).map((d) => d.symbol),
+        usesRealQuotes("LIVE") ? "LIVE" : "SIMULATED",
+        { now, maxFetch: 0 },
+      )
+    ).values(),
+  ];
   // Illustrative hero chart: real simulated wiggles, tilted to match the +18% headline.
   const raw = simulatedHistory(getPopularInstrument("NVDA")!, "ALWAYS", "1M", now).map((p) => p.p);
   const hero = raw.map((p, i) => p * (1 + (0.35 * i) / raw.length));

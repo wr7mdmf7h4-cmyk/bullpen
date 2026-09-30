@@ -147,7 +147,7 @@ Tip: check the **renewal** price, not just the first-year price, and turn on aut
 
 ## 8. Make it CV-ready
 
-- In `README.md`, replace `YOUR-DEPLOYMENT` with your Vercel URL (or custom domain), then push.
+- In `README.md`, make sure the demo link points at your domain, then push.
 - On the GitHub repo page, click ⚙️ next to **About** and add a description, your Vercel URL as the website, and topics (`nextjs`, `typescript`, `postgres`, `prisma`, `trading`, `game`).
 - Check the **Actions** tab shows a green tick.
 - Optional: record a 10-second GIF of a profitable sell with confetti and add it to the top of the README.

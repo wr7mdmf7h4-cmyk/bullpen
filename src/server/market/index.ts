@@ -3,7 +3,14 @@ import { db } from "../db";
 import { env } from "../env";
 import type { InstrumentDef } from "@/domain/market/universe";
 import { findInstruments, popularInstruments } from "../instruments";
-import { simulatedHistory, simulatedPriceCents, simulatedQuote, simulatedYearRange } from "@/domain/market/simulated";
+import {
+  anchorInstrument,
+  simulatedHistory,
+  simulatedPriceCents,
+  simulatedQuote,
+  simulatedYearRange,
+  type PriceAnchor,
+} from "@/domain/market/simulated";
 import { calendarFor } from "@/domain/market/status";
 import { isMarketOpen } from "@/domain/market/hours";
 import type { ChartRange, PricePoint, Quote } from "@/domain/market/types";
@@ -20,6 +27,10 @@ import { fetchMetrics, fetchQuote, type FundamentalMetrics, type Priority } from
  *                                (in-memory → Postgres QuoteCache → API),
  *                                falling back to the last known price and
  *                                finally to the simulation if the API fails.
+ *
+ * Whenever a real price has been seen for a symbol, the simulation is
+ * anchored to it (anchorInstrument), so the 24/7 simulated leagues track
+ * real price levels and only the moves in between are simulated.
  */
 
 export class UnknownSymbolError extends Error {
@@ -28,10 +39,48 @@ export class UnknownSymbolError extends Error {
   }
 }
 
+// Last real price per symbol, read from the shared QuoteCache and memoised
+// briefly per instance.
+const ANCHOR_TTL_MS = 5 * 60_000;
+const anchors = new Map<string, { anchor: PriceAnchor | null; loadedAt: number }>();
+
+function rememberAnchor(symbol: string, priceCents: number, at: number) {
+  anchors.set(symbol, { anchor: { priceCents, at }, loadedAt: Date.now() });
+}
+
+async function loadAnchors(symbols: string[]): Promise<Map<string, PriceAnchor>> {
+  const now = Date.now();
+  const stale = symbols.filter((s) => {
+    const hit = anchors.get(s);
+    return !hit || now - hit.loadedAt > ANCHOR_TTL_MS;
+  });
+  if (stale.length) {
+    const rows = await db.quoteCache.findMany({
+      where: { symbol: { in: stale } },
+      select: { symbol: true, priceCents: true, fetchedAt: true },
+    });
+    const found = new Map(rows.map((r) => [r.symbol, { priceCents: r.priceCents, at: r.fetchedAt.getTime() }]));
+    for (const s of stale) anchors.set(s, { anchor: found.get(s) ?? null, loadedAt: now });
+  }
+  const out = new Map<string, PriceAnchor>();
+  for (const s of symbols) {
+    const a = anchors.get(s)?.anchor;
+    if (a) out.set(s, a);
+  }
+  return out;
+}
+
+/** Instrument definitions for simulation, anchored to real prices where known. */
 async function requireInstruments(symbols: string[]): Promise<Map<string, InstrumentDef>> {
   const defs = await findInstruments(symbols);
   for (const s of symbols) if (!defs.has(s)) throw new UnknownSymbolError(s);
-  return defs;
+  const known = await loadAnchors(symbols);
+  const out = new Map<string, InstrumentDef>();
+  for (const [symbol, def] of defs) {
+    const anchor = known.get(symbol);
+    out.set(symbol, anchor ? anchorInstrument(def, anchor) : def);
+  }
+  return out;
 }
 
 async function requireInstrument(symbol: string): Promise<InstrumentDef> {
@@ -112,6 +161,7 @@ async function liveQuotes(
       const q = result.value;
       out.set(symbol, q);
       memory.set(symbol, { ...q, cachedAt: now.getTime() });
+      rememberAnchor(symbol, q.priceCents, now.getTime());
       const data = { priceCents: q.priceCents, prevCloseCents: q.prevCloseCents, fetchedAt: now };
       writes.push(db.quoteCache.upsert({ where: { symbol }, update: data, create: { symbol, ...data } }));
     } else {

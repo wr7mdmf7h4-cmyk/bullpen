@@ -82,6 +82,20 @@ export function simulatedPriceCents(def: InstrumentDef, t: number): number {
   return Math.max(1, Math.round(def.basePrice * 100 * Math.exp(logPrice)));
 }
 
+export type PriceAnchor = { priceCents: number; at: number };
+
+/**
+ * Re-bases an instrument so the simulation passes exactly through a real
+ * observed price. Scaling the base price rescales the whole path, so the
+ * *shape* (every relative move) is unchanged: the simulated 24/7 market then
+ * tracks the real market, wandering realistically between real quotes.
+ */
+export function anchorInstrument(def: InstrumentDef, anchor: PriceAnchor): InstrumentDef {
+  if (anchor.priceCents <= 0) return def;
+  const simulatedAtAnchor = simulatedPriceCents(def, anchor.at);
+  return { ...def, basePrice: (def.basePrice * anchor.priceCents) / simulatedAtAnchor };
+}
+
 type Window = { from: number; to: number; stepMs: number };
 
 function sampleRange(def: InstrumentDef, windows: Window[], filter?: (t: number) => boolean): PricePoint[] {
