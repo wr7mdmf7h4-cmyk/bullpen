@@ -51,6 +51,7 @@
   --animate-flash-gain: flash-gain 900ms ease-out;
   --animate-flash-loss: flash-loss 900ms ease-out;
   --animate-pulse-dot: pulse-dot 1.8s ease-in-out infinite;
+  --animate-marquee: marquee 60s linear infinite;
 }
 
 :root,
@@ -154,6 +155,15 @@
   }
   100% {
     background-color: transparent;
+  }
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
   }
 }
 

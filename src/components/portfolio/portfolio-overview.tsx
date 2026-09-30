@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { ChartHero } from "@/components/market/chart-hero";
-import { Delta } from "@/components/market/delta";
+import { Delta, toneClass } from "@/components/market/delta";
 import { FlashNumber } from "@/components/market/flash-number";
 import { MarketStatusPill, type MarketStatusDTO } from "@/components/market/market-status-pill";
 import { TickerBadge } from "@/components/market/ticker-badge";
@@ -65,9 +65,7 @@ export function PortfolioOverview(props: Props) {
         <Stat
           label="Unrealised P&L"
           value={
-            <span className={v.unrealizedPnlCents >= 0 ? "text-gain" : "text-loss"}>
-              {formatCents(v.unrealizedPnlCents, { sign: true })}
-            </span>
+            <span className={toneClass(v.unrealizedPnlCents)}>{formatCents(v.unrealizedPnlCents, { sign: true })}</span>
           }
         />
         {!props.compact && (
@@ -75,7 +73,7 @@ export function PortfolioOverview(props: Props) {
             <Stat
               label="Realised P&L"
               value={
-                <span className={props.realizedPnlCents >= 0 ? "text-gain" : "text-loss"}>
+                <span className={toneClass(props.realizedPnlCents)}>
                   {formatCents(props.realizedPnlCents, { sign: true })}
                 </span>
               }
