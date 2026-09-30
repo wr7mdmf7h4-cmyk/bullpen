@@ -135,3 +135,21 @@ export function exceedsSlippage(
 export function averageCostCents(position: Position): Cents {
   return position.quantity > 0 ? mulDivRound(position.costBasisCents, 1, position.quantity) : 0;
 }
+
+/** Oldest shared-cache quote a real-money-style (LIVE) order may execute against. */
+export const MAX_CACHED_QUOTE_AGE_MS = 2 * 60_000;
+
+/**
+ * Whether an order may fill at this quote. With real quotes enabled we never
+ * execute at a simulated fallback or a stale cached price: for an obscure
+ * ticker that would be free money.
+ */
+export function isExecutableQuote(
+  quote: { source: "finnhub" | "cache" | "simulated"; asOf: Date },
+  opts: { realQuotes: boolean; now: Date },
+): boolean {
+  if (!opts.realQuotes) return true;
+  if (quote.source === "simulated") return false;
+  if (quote.source === "cache") return opts.now.getTime() - quote.asOf.getTime() <= MAX_CACHED_QUOTE_AGE_MS;
+  return true;
+}

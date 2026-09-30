@@ -1,9 +1,11 @@
 /**
- * The tradable universe: ~50 liquid US stocks and ETFs.
+ * Instruments.
  *
- * Keeping the universe curated (rather than "any ticker on earth") keeps us
- * inside free-tier API limits, guarantees every symbol has a sector for the
- * "Diversified" achievement, and lets the simulated market model each stock.
+ * The full tradable universe (~12k US-listed stocks and ETFs) lives in the
+ * database, synced from the exchange symbol directory. This module holds the
+ * pure pieces: the hand-picked POPULAR list (shown on the Markets page, used
+ * by the seed and the landing-page ticker, with tuned simulation parameters),
+ * a deterministic simulation profile for every other ticker, and search.
  *
  * `basePrice` (dollars) and `vol` (annualised volatility) only drive the
  * simulated market; live leagues use real quotes.
@@ -26,16 +28,25 @@ export const SECTORS = [
 
 export type Sector = (typeof SECTORS)[number];
 
+/** Sector for instruments we haven't classified yet. */
+export const UNKNOWN_SECTOR = "Unknown";
+
+/** Whether a sector counts towards the "Diversified" badge. */
+export function countsForDiversification(sector: string): boolean {
+  return sector !== "ETF" && sector !== UNKNOWN_SECTOR;
+}
+
 export type InstrumentDef = {
   symbol: string;
   name: string;
-  sector: Sector;
-  exchange: "NASDAQ" | "NYSE" | "NYSE ARCA";
+  sector: string;
+  exchange: string;
   basePrice: number;
   vol: number;
+  isEtf?: boolean;
 };
 
-export const UNIVERSE: readonly InstrumentDef[] = [
+export const POPULAR: readonly InstrumentDef[] = [
   // Technology
   { symbol: "AAPL", name: "Apple Inc.", sector: "Technology", exchange: "NASDAQ", basePrice: 232, vol: 0.28 },
   { symbol: "MSFT", name: "Microsoft Corp.", sector: "Technology", exchange: "NASDAQ", basePrice: 485, vol: 0.25 },
@@ -200,34 +211,77 @@ export const UNIVERSE: readonly InstrumentDef[] = [
   { symbol: "QQQ", name: "Invesco QQQ Trust", sector: "ETF", exchange: "NASDAQ", basePrice: 575, vol: 0.2 },
 ];
 
-const BY_SYMBOL = new Map(UNIVERSE.map((i) => [i.symbol, i]));
+const BY_SYMBOL = new Map(POPULAR.map((i) => [i.symbol, i]));
 
-export function getInstrument(symbol: string): InstrumentDef | undefined {
+/** One of the hand-picked popular instruments (the full universe is in the DB). */
+export function getPopularInstrument(symbol: string): InstrumentDef | undefined {
   return BY_SYMBOL.get(symbol.toUpperCase());
 }
 
-export function isKnownSymbol(symbol: string): boolean {
-  return BY_SYMBOL.has(symbol.toUpperCase());
+/** 32-bit string hash (FNV-1a). */
+function hash(s: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
 }
 
-/** Case-insensitive search over ticker and company name, ticker matches first. */
-export function searchUniverse(query: string, limit = 10): InstrumentDef[] {
+/**
+ * Deterministic simulation parameters for any ticker: a log-uniform base
+ * price ($8–$400 for stocks, $15–$500 for ETFs) and a volatility typical for
+ * the asset type. Same symbol → same numbers on every server.
+ */
+export function simulationProfile(symbol: string, isEtf: boolean): { basePrice: number; vol: number } {
+  const h = hash(symbol.toUpperCase());
+  const u1 = (h % 10_007) / 10_007;
+  const u2 = ((h >>> 12) % 10_009) / 10_009;
+  const [lo, hi] = isEtf ? [15, 500] : [8, 400];
+  const basePrice = Math.round(Math.exp(Math.log(lo) + u1 * (Math.log(hi) - Math.log(lo))) * 100) / 100;
+  const vol = isEtf ? 0.12 + u2 * 0.2 : 0.25 + u2 * 0.55;
+  return { basePrice, vol: Math.round(vol * 1000) / 1000 };
+}
+
+export type Searchable = { symbol: string; name: string; isPopular?: boolean };
+
+/**
+ * Case-insensitive ranking over ticker and company name: exact ticker, then
+ * ticker prefix, then name prefix/word prefix, then substring. Popular names
+ * win ties so "apple" finds AAPL before APLE.
+ */
+export function rankSearch<T extends Searchable>(items: Iterable<T>, query: string, limit = 10): T[] {
   const q = query.trim().toLowerCase();
-  if (!q) return UNIVERSE.slice(0, limit);
-  const scored: { def: InstrumentDef; score: number }[] = [];
-  for (const def of UNIVERSE) {
-    const sym = def.symbol.toLowerCase();
-    const name = def.name.toLowerCase();
+  const all = [...items];
+  if (!q) return all.filter((i) => i.isPopular).slice(0, limit);
+  const scored: { item: T; score: number }[] = [];
+  for (const item of all) {
+    const sym = item.symbol.toLowerCase();
+    const name = item.name.toLowerCase();
     let score = -1;
     if (sym === q) score = 0;
-    else if (sym.startsWith(q)) score = 1;
-    else if (name.startsWith(q)) score = 2;
-    else if (name.split(/[\s.&-]+/).some((w) => w.startsWith(q))) score = 3;
-    else if (name.includes(q)) score = 4;
-    if (score >= 0) scored.push({ def, score });
+    else if (sym.startsWith(q)) score = 10 + sym.length;
+    else if (name.startsWith(q)) score = 30;
+    else if (name.split(/[\s.,&()-]+/).some((w) => w.startsWith(q))) score = 40;
+    else if (name.includes(q)) score = 50;
+    if (score < 0) continue;
+    if (item.isPopular) score -= 5;
+    scored.push({ item, score });
   }
   return scored
-    .sort((a, b) => a.score - b.score || a.def.symbol.localeCompare(b.def.symbol))
+    .sort(
+      (a, b) =>
+        a.score - b.score || a.item.symbol.length - b.item.symbol.length || a.item.symbol.localeCompare(b.item.symbol),
+    )
     .slice(0, limit)
-    .map((s) => s.def);
+    .map((s) => s.item);
+}
+
+/** Search within the popular list (used where the database isn't needed). */
+export function searchPopular(query: string, limit = 10): InstrumentDef[] {
+  return rankSearch(
+    POPULAR.map((i) => ({ ...i, isPopular: true })),
+    query,
+    limit,
+  );
 }

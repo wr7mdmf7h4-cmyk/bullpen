@@ -1,20 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { searchUniverse } from "@/domain/market/universe";
+import { useInstrumentSearch } from "@/hooks/use-instrument-search";
 import { TickerBadge } from "@/components/market/ticker-badge";
 import { cn } from "@/lib/utils";
 
-/** ⌘K / Ctrl-K stock search. The universe is small, so search runs client-side instantly. */
+/** ⌘K / Ctrl-K search across every US-listed stock and ETF. */
 export function StockSearch() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
-  const results = useMemo(() => searchUniverse(query, 8), [query]);
+  const { results, loading } = useInstrumentSearch(query, 8);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -57,7 +57,11 @@ export function StockSearch() {
         >
           <DialogTitle className="sr-only">Search stocks</DialogTitle>
           <div className="flex items-center gap-2 border-b px-4">
-            <Search className="size-4 text-muted-foreground" />
+            {loading ? (
+              <Loader2 className="size-4 animate-spin text-muted-foreground" />
+            ) : (
+              <Search className="size-4 text-muted-foreground" />
+            )}
             <input
               autoFocus
               value={query}
@@ -76,7 +80,7 @@ export function StockSearch() {
                   go(results[cursor].symbol);
                 }
               }}
-              placeholder="Search Apple, NVDA, banks…"
+              placeholder="Search any US stock or ETF…"
               className="h-12 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
               role="combobox"
               aria-expanded
@@ -100,7 +104,7 @@ export function StockSearch() {
                     <span className="block font-mono text-sm font-semibold">{r.symbol}</span>
                     <span className="block truncate text-xs text-muted-foreground">{r.name}</span>
                   </span>
-                  <span className="text-xs text-muted-foreground">{r.sector}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{r.isEtf ? "ETF" : r.exchange}</span>
                 </button>
               </li>
             ))}

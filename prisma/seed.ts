@@ -16,7 +16,7 @@
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
-import { UNIVERSE, getInstrument, type InstrumentDef } from "../src/domain/market/universe";
+import { POPULAR, getPopularInstrument, type InstrumentDef } from "../src/domain/market/universe";
 import { simulatedPriceCents, simulatedQuote } from "../src/domain/market/simulated";
 import { isMarketOpen } from "../src/domain/market/hours";
 import { calendarFor } from "../src/domain/market/status";
@@ -159,8 +159,8 @@ function randomTimes(from: number, to: number, n: number, source: "LIVE" | "SIMU
 }
 
 function candidateSymbols(persona: Persona): InstrumentDef[] {
-  const preferred = UNIVERSE.filter((i) => persona.sectors.includes(i.sector));
-  return rng() < 0.75 && preferred.length ? preferred : [...UNIVERSE];
+  const preferred = POPULAR.filter((i) => persona.sectors.includes(i.sector));
+  return rng() < 0.75 && preferred.length ? preferred : [...POPULAR];
 }
 
 async function main() {
@@ -169,7 +169,7 @@ async function main() {
 
   // ── reference data ───────────────────────────────────────────────────────
   await db.instrument.createMany({
-    data: UNIVERSE.map(({ symbol, name, sector, exchange }) => ({ symbol, name, sector, exchange })),
+    data: POPULAR.map(({ symbol, name, sector, exchange }) => ({ symbol, name, sector, exchange })),
     skipDuplicates: true,
   });
   for (const league of Object.values(SYSTEM_LEAGUES)) {
@@ -293,7 +293,7 @@ async function main() {
         } else {
           const symbol = pick(sellable);
           const pos = positions.get(symbol)!;
-          const price = simulatedPriceCents(getInstrument(symbol)!, t);
+          const price = simulatedPriceCents(getPopularInstrument(symbol)!, t);
           const quantity = rng() < 0.6 ? pos.quantity : Math.max(1, Math.floor(pos.quantity * rng()));
           const check = validateOrder({
             side,
@@ -396,7 +396,7 @@ async function main() {
           }
         }
         const prices = new Map(
-          [...held.keys()].map((s) => [s, simulatedQuote(getInstrument(s)!, calendar, new Date(at)).priceCents]),
+          [...held.keys()].map((s) => [s, simulatedQuote(getPopularInstrument(s)!, calendar, new Date(at)).priceCents]),
         );
         const v = valuePortfolio(
           c,
@@ -467,7 +467,9 @@ async function main() {
       maxSectorsHeld: Math.max(
         0,
         ...finalStates.map(
-          (s) => new Set([...s.positions.keys()].map((k) => getInstrument(k)!.sector).filter((x) => x !== "ETF")).size,
+          (s) =>
+            new Set([...s.positions.keys()].map((k) => getPopularInstrument(k)!.sector).filter((x) => x !== "ETF"))
+              .size,
         ),
       ),
       oldestOpenPositionAt: (() => {
@@ -480,7 +482,7 @@ async function main() {
           const prices = new Map(
             [...s.positions.keys()].map((k) => [
               k,
-              simulatedQuote(getInstrument(k)!, calendarFor(s.source), now).priceCents,
+              simulatedQuote(getPopularInstrument(k)!, calendarFor(s.source), now).priceCents,
             ]),
           );
           const v = valuePortfolio(

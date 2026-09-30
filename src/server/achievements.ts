@@ -30,7 +30,7 @@ async function buildContext(userId: string, now: Date): Promise<AchievementConte
           FROM "Holding" h
           JOIN "Portfolio" p ON p.id = h."portfolioId"
           JOIN "Instrument" i ON i.symbol = h.symbol
-          WHERE p."userId" = ${userId} AND i."sector" <> 'ETF'
+          WHERE p."userId" = ${userId} AND i."sector" NOT IN ('ETF', 'Unknown')
           GROUP BY h."portfolioId"
         ) per_portfolio`,
       db.holding.findFirst({

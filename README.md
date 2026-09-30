@@ -35,7 +35,7 @@ A multiplayer paper-trading game: everyone starts with $10,000, trades real US s
 
 **Trading**
 
-- ~50 popular US stocks and ETFs, searchable with <kbd>⌘K</kbd>, with sector filters, movers and sparklines
+- **Every US-listed stock and ETF (~12,000)**, synced from the exchanges' public symbol directory and searchable with <kbd>⌘K</kbd>; a hand-picked Popular list with sector filters, movers and sparklines
 - Robinhood-style price charts (1D / 1W / 1M / 1Y): drag across the chart and the headline price scrubs with you
 - Market orders with a live fee preview (**$1 flat + 0.1%**, configurable per league), a “Max” button, and a review sheet with the full fee breakdown
 - **Press-and-hold to confirm**: the deliberate friction real brokers use for irreversible orders
@@ -162,10 +162,11 @@ src/
 │  ├─ achievements.ts badge definitions + unlock rules
 │  ├─ activity.ts     feed payload schema + copy
 │  ├─ leagues.ts      league lifecycle, invite codes
-│  └─ market/         NYSE calendar, deterministic simulated market, universe, status
+│  └─ market/         NYSE calendar, simulated market, symbol-directory parser, search, sectors
 ├─ server/            Everything with side effects (all `server-only`)
 │  ├─ trading/        executeTrade: the transactional engine
 │  ├─ market/         Finnhub client + cached market data facade
+│  ├─ instruments.ts  in-memory universe (~12k symbols), search, sector enrichment
 │  ├─ leagues/        membership, active league, create/join, tradability
 │  ├─ actions/        Server Actions (the only write entry points)
 │  ├─ auth/           Auth.js config, argon2id
@@ -226,7 +227,9 @@ Realtime messages are **invalidations, not data** (“league X changed, refetch�
 
 ### Other decisions and trade-offs
 
-- **Curated ~50-stock universe** instead of “any ticker”: stays inside free API limits, guarantees every symbol has a sector (for Diversified), and lets the simulation model each stock.
+- **The whole US market, kept cheap.** The universe (~12k symbols) is synced from the NASDAQ Trader symbol directory, which lists every NASDAQ/NYSE/Arca/Cboe security. A pure parser keeps common stock, ADRs, share classes (BRK.B), MLP units and ETFs, and drops warrants, rights, SPAC units, preferreds and notes. Each server instance holds the universe in memory (~12k small rows), so lookups and search are effectively free. Quotes are fetched only for symbols someone is looking at or holds, so the free Finnhub tier still works. Sectors for non-curated stocks are filled in from Finnhub's company profile the first time someone opens the page. Symbols that disappear from the directory are marked delisted: still held and valued, no longer tradable. The sync runs on every deploy and weekly from the cron.
+- **Never fill at a fake price.** With real quotes on, an order is rejected if the only price available is the simulated fallback or a cached quote older than 2 minutes (`isExecutableQuote`). Without that rule, an obscure ticker whose quote failed could be bought at a made-up price.
+- **The simulation covers every ticker.** Non-curated symbols get a deterministic profile (base price, volatility) derived from the ticker, so the 24/7 practice market and keyless demos work for all 12k symbols.
 - **Auth.js with JWT sessions and no database adapter.** Credentials require JWTs anyway; Google users are matched to accounts by _verified_ email. The JWT only carries the user id.
 - **Demo login** uses a separate passwordless provider that only accepts a single-use token minted by a rate-limited Server Action, so it can't be abused as an open login endpoint.
 - **Achievements live in code**, the database only stores `(user, key, unlockedAt)`. Adding a badge needs no migration. Time-based badges (Diamond Hands) are also evaluated on dashboard visits.
@@ -247,6 +250,7 @@ cd bullpen
 npm install                  # also runs `prisma generate`
 cp .env.example .env         # then set DATABASE_URL and AUTH_SECRET
 npm run db:migrate           # applies migrations incl. CHECK constraints
+npm run instruments:sync     # loads every US-listed stock & ETF (~12k, takes a few seconds)
 npm run db:seed              # optional: demo users, a league and 45 days of history
 npm run dev
 ```
@@ -282,17 +286,19 @@ Every variable is documented in [`.env.example`](.env.example).
 
 ## Testing
 
-- **Unit (Vitest):** every module in `src/domain`: fee rounding, order validation, pro-rata cost basis, realised P&L, max affordable shares, valuation, tie-aware ranking, achievement thresholds, rank titles, NYSE hours across DST/holidays/early closes, and properties of the simulated market (deterministic, tick-stable, bounded, frozen when closed).
-- **Integration (real Postgres):** simultaneous buys can't overspend, simultaneous sells can't oversell, a triple-submitted idempotency key produces one trade, CHECK constraints reject negative cash, and trading before a league starts is refused.
+- **Unit (Vitest):** every module in `src/domain`: fee rounding, order validation, pro-rata cost basis, realised P&L, max affordable shares, valuation, tie-aware ranking, achievement thresholds, rank titles, NYSE hours across DST/holidays/early closes, and properties of the simulated market (deterministic, tick-stable, bounded, frozen when closed), the exchange symbol-directory parser (what counts as a buyable stock), industry→sector mapping, search ranking, and the never-fill-at-a-fake-price rule.
+- **Integration (real Postgres):** any listed symbol can be traded while unknown or delisted ones are refused, simultaneous buys can't overspend, simultaneous sells can't oversell, a triple-submitted idempotency key produces one trade, CHECK constraints reject negative cash, and trading before a league starts is refused.
 - **End-to-end (Playwright):** the core loop in a real browser, including press-and-hold.
 - **CI (GitHub Actions):** lint, formatting, type-check and unit tests on every push; integration tests against a Postgres service container.
 
 ## Deploying (Vercel + Neon)
 
+Full click-by-click guide: **[docs/DEPLOYING.md](docs/DEPLOYING.md)**. The short version:
+
 1. Create a Neon project; copy the pooled connection string (and optionally the direct one).
 2. Import the repo in Vercel. Add `DATABASE_URL`, `AUTH_SECRET` (and any optional variables).
-3. Deploy. `vercel.json` runs `prisma migrate deploy` before `next build` and registers the daily snapshot cron.
-4. Seed once from your machine: `DATABASE_URL=… npm run db:seed`.
+3. Deploy. `vercel.json` runs `prisma migrate deploy` and the instrument sync before `next build`, and registers the daily cron (snapshots + weekly universe refresh).
+4. From your machine, once: `npm run db:migrate && npm run instruments:sync && npm run db:seed` with your Neon URLs in `.env`.
 
 ---
 
@@ -306,7 +312,8 @@ Every variable is documented in [`.env.example`](.env.example).
 - **Social layer:** comments and reactions on feed items, head-to-head challenges, end-of-league recap cards to share.
 - **Per-visitor demo accounts** that reset nightly, instead of one shared demo user.
 - **Observability:** structured logging, Sentry, and alerts on trade failures or quote-provider errors.
-- **Wider universe** with on-demand instrument metadata (sector, market cap) cached from the data provider.
+- **OTC and international listings**, plus richer metadata (logos, market cap, descriptions) cached from the data provider.
+- **A paid or batch quote source** so leaderboards with thousands of distinct holdings don't lean on the free tier's 60 calls/minute.
 
 ---
 

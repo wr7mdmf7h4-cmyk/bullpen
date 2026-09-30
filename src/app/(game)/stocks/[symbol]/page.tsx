@@ -5,7 +5,8 @@ import { KeyStats } from "@/components/market/key-stats";
 import { LiveQuotesProvider } from "@/components/market/live-quote-context";
 import { StockChart } from "@/components/market/stock-chart";
 import { TickerBadge } from "@/components/market/ticker-badge";
-import { getInstrument } from "@/domain/market/universe";
+import { enrichSector, findInstrument } from "@/server/instruments";
+import { UNKNOWN_SECTOR } from "@/domain/market/universe";
 import { marketStatus } from "@/domain/market/status";
 import { serializeQuote } from "@/lib/serialize";
 import { serializeStatus } from "@/lib/market-status";
@@ -20,14 +21,15 @@ import { TradePanel } from "@/components/trade/trade-panel";
 
 export async function generateMetadata({ params }: PageProps<"/stocks/[symbol]">): Promise<Metadata> {
   const { symbol } = await params;
-  const def = getInstrument(symbol);
+  const def = await findInstrument(decodeURIComponent(symbol));
   return { title: def ? `${def.symbol} · ${def.name}` : "Stock not found" };
 }
 
 export default async function StockPage({ params }: PageProps<"/stocks/[symbol]">) {
   const user = await requireUser();
-  const def = getInstrument((await params).symbol);
-  if (!def) notFound();
+  const found = await findInstrument(decodeURIComponent((await params).symbol));
+  if (!found) notFound();
+  const def = await enrichSector(found);
 
   const portfolio = await getActivePortfolio(user.id);
   const source = portfolio.league.marketSource;
@@ -55,9 +57,17 @@ export default async function StockPage({ params }: PageProps<"/stocks/[symbol]"
               <h1 className="truncate text-xl font-semibold tracking-tight">{def.name}</h1>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <span className="font-mono font-medium text-foreground">{def.symbol}</span>
-                <Badge variant="secondary" className="font-normal">
-                  {def.sector}
-                </Badge>
+                <span className="text-xs">{def.exchange}</span>
+                {def.sector !== UNKNOWN_SECTOR && (
+                  <Badge variant="secondary" className="font-normal">
+                    {def.sector}
+                  </Badge>
+                )}
+                {!def.isActive && (
+                  <Badge variant="destructive" className="font-normal">
+                    Delisted
+                  </Badge>
+                )}
               </div>
             </div>
           </header>
@@ -99,7 +109,14 @@ export default async function StockPage({ params }: PageProps<"/stocks/[symbol]"
             fees={{ flatCents: league.feeFlatCents, bps: league.feeBps }}
             cashCents={portfolio.cashCents}
             heldQuantity={holding?.quantity ?? 0}
-            tradability={getTradability(league, now)}
+            tradability={
+              def.isActive
+                ? getTradability(league, now)
+                : {
+                    ok: false,
+                    reason: `${def.symbol} is no longer listed, so it can't be traded. You can still hold it.`,
+                  }
+            }
           />
         </aside>
       </div>

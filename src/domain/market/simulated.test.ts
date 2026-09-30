@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { getInstrument, UNIVERSE } from "./universe";
+import { getPopularInstrument, POPULAR } from "./universe";
 import { effectiveTime, simulatedHistory, simulatedPriceCents, simulatedQuote, TICK_MS } from "./simulated";
 
-const nvda = getInstrument("NVDA")!;
+const nvda = getPopularInstrument("NVDA")!;
 const t0 = Date.UTC(2026, 5, 15, 15, 0, 0);
 
 describe("simulated market", () => {
@@ -18,11 +18,11 @@ describe("simulated market", () => {
   it("moves between ticks and differs between symbols", () => {
     const prices = new Set(Array.from({ length: 20 }, (_, i) => simulatedPriceCents(nvda, t0 + i * 60_000)));
     expect(prices.size).toBeGreaterThan(10);
-    expect(simulatedPriceCents(getInstrument("AAPL")!, t0)).not.toBe(simulatedPriceCents(nvda, t0));
+    expect(simulatedPriceCents(getPopularInstrument("AAPL")!, t0)).not.toBe(simulatedPriceCents(nvda, t0));
   });
 
   it("produces positive integer cents that stay in a plausible band", () => {
-    for (const def of UNIVERSE) {
+    for (const def of POPULAR) {
       for (let day = 0; day < 365; day += 7) {
         const p = simulatedPriceCents(def, Date.UTC(2026, 0, 1) + day * 86_400_000);
         expect(Number.isInteger(p)).toBe(true);

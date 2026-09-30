@@ -36,7 +36,7 @@ export function KeyStats({ stats, sector, exchange }: { stats: KeyStatsData; sec
           <Stat label="Market cap" value={compactUsd.format(stats.marketCapDollars)} />
         )}
         {stats.peRatio !== null && <Stat label="P/E ratio" value={stats.peRatio.toFixed(2)} />}
-        <Stat label="Sector" value={sector} />
+        <Stat label="Sector" value={sector === "Unknown" ? "—" : sector} />
         <Stat label="Exchange" value={exchange} />
       </dl>
     </section>

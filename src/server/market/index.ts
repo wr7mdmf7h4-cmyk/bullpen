@@ -1,7 +1,8 @@
 import "server-only";
 import { db } from "../db";
 import { env } from "../env";
-import { getInstrument, UNIVERSE, type InstrumentDef } from "@/domain/market/universe";
+import type { InstrumentDef } from "@/domain/market/universe";
+import { findInstruments, popularInstruments } from "../instruments";
 import { simulatedHistory, simulatedPriceCents, simulatedQuote, simulatedYearRange } from "@/domain/market/simulated";
 import { calendarFor } from "@/domain/market/status";
 import { isMarketOpen } from "@/domain/market/hours";
@@ -27,10 +28,15 @@ export class UnknownSymbolError extends Error {
   }
 }
 
-function requireInstrument(symbol: string): InstrumentDef {
-  const def = getInstrument(symbol);
-  if (!def) throw new UnknownSymbolError(symbol);
-  return def;
+async function requireInstruments(symbols: string[]): Promise<Map<string, InstrumentDef>> {
+  const defs = await findInstruments(symbols);
+  for (const s of symbols) if (!defs.has(s)) throw new UnknownSymbolError(s);
+  return defs;
+}
+
+async function requireInstrument(symbol: string): Promise<InstrumentDef> {
+  const s = symbol.toUpperCase();
+  return (await requireInstruments([s])).get(s)!;
 }
 
 function liveKey() {
@@ -50,7 +56,12 @@ function ttlMs(now: Date) {
   return isMarketOpen(now) ? 15_000 : 10 * 60_000;
 }
 
-async function liveQuotes(symbols: string[], now: Date, maxFetch: number): Promise<Map<string, Quote>> {
+async function liveQuotes(
+  symbols: string[],
+  defs: Map<string, InstrumentDef>,
+  now: Date,
+  maxFetch: number,
+): Promise<Map<string, Quote>> {
   const key = liveKey()!;
   const ttl = ttlMs(now);
   const out = new Map<string, Quote>();
@@ -110,7 +121,7 @@ async function liveQuotes(symbols: string[], now: Date, maxFetch: number): Promi
   // 4. fallbacks: last known price, then the simulation
   for (const symbol of missing) {
     if (out.has(symbol)) continue;
-    out.set(symbol, stale.get(symbol) ?? simulatedQuote(requireInstrument(symbol), "NYSE", now));
+    out.set(symbol, stale.get(symbol) ?? simulatedQuote(defs.get(symbol)!, "NYSE", now));
   }
   return out;
 }
@@ -124,10 +135,10 @@ export async function getQuotes(
 ): Promise<Map<string, Quote>> {
   const now = opts.now ?? new Date();
   const unique = [...new Set(symbols.map((s) => s.toUpperCase()))];
-  unique.forEach(requireInstrument);
-  if (usesRealQuotes(source)) return liveQuotes(unique, now, opts.maxFetch ?? 25);
+  const defs = await requireInstruments(unique);
+  if (usesRealQuotes(source)) return liveQuotes(unique, defs, now, opts.maxFetch ?? 25);
   const calendar = calendarFor(source);
-  return new Map(unique.map((s) => [s, simulatedQuote(requireInstrument(s), calendar, now)]));
+  return new Map(unique.map((s) => [s, simulatedQuote(defs.get(s)!, calendar, now)]));
 }
 
 export async function getQuote(symbol: string, source: MarketSourceKind, now = new Date()): Promise<Quote> {
@@ -135,9 +146,11 @@ export async function getQuote(symbol: string, source: MarketSourceKind, now = n
   return quotes.get(symbol.toUpperCase())!;
 }
 
-export async function getAllQuotes(source: MarketSourceKind, now = new Date()) {
+/** Quotes for the hand-picked popular list shown on the Markets page. */
+export async function getPopularQuotes(source: MarketSourceKind, now = new Date()) {
+  const popular = await popularInstruments();
   return getQuotes(
-    UNIVERSE.map((i) => i.symbol),
+    popular.map((i) => i.symbol),
     source,
     { now },
   );
@@ -156,7 +169,7 @@ export async function getHistory(
   range: ChartRange,
   now = new Date(),
 ): Promise<History> {
-  const def = requireInstrument(symbol);
+  const def = await requireInstrument(symbol);
   const calendar = calendarFor(source);
   const points = simulatedHistory(def, calendar, range, now);
   if (!usesRealQuotes(source)) return { points, illustrative: false };
@@ -187,7 +200,7 @@ export type KeyStats = {
 const metricsCache = new Map<string, { value: FundamentalMetrics; at: number }>();
 
 export async function getKeyStats(symbol: string, source: MarketSourceKind, now = new Date()): Promise<KeyStats> {
-  const def = requireInstrument(symbol);
+  const def = await requireInstrument(symbol);
   const quote = await getQuote(symbol, source, now);
   const base = {
     openCents: quote.openCents,

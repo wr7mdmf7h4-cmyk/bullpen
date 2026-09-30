@@ -162,16 +162,29 @@ model PortfolioSnapshot {
 
 // ─────────────────────────── Market data ───────────────────────────
 
-/// The tradable universe (~50 liquid US stocks and ETFs).
+/// The tradable universe: every US-listed common stock, ADR and ETF, synced
+/// from the NASDAQ Trader symbol directory (npm run instruments:sync).
 model Instrument {
-  symbol   String  @id
-  name     String
-  sector   String
-  exchange String
-  isActive Boolean @default(true)
+  symbol         String    @id
+  name           String
+  /// GICS-style sector, "ETF", or "Unknown" until enriched from Finnhub
+  sector         String    @default("Unknown")
+  exchange       String
+  isEtf          Boolean   @default(false)
+  /// hand-picked, liquid names shown on the Markets page
+  isPopular      Boolean   @default(false)
+  /// false once a symbol disappears from the exchange directory (delisted)
+  isActive       Boolean   @default(true)
+  /// simulated-market anchor; null = derived deterministically from the symbol
+  basePriceCents Int?
+  /// simulated-market annualised volatility in bps; null = derived
+  volBps         Int?
+  syncedAt       DateTime?
 
   holdings Holding[]
   trades   Trade[]
+
+  @@index([isPopular])
 }
 
 /// Last known live quote per symbol. Survives restarts so portfolios can be

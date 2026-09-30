@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import { MarketsTable, type MarketRow } from "@/components/market/markets-table";
 import { MarketStatusPill } from "@/components/market/market-status-pill";
-import { UNIVERSE } from "@/domain/market/universe";
+import { countInstruments, popularInstruments } from "@/server/instruments";
 import { marketStatus } from "@/domain/market/status";
 import { serializeQuote } from "@/lib/serialize";
 import { serializeStatus } from "@/lib/market-status";
 import { getActivePortfolio } from "@/server/leagues/active";
-import { getAllQuotes, getHistory, usesRealQuotes } from "@/server/market";
+import { getHistory, getPopularQuotes, usesRealQuotes } from "@/server/market";
 import { requireUser } from "@/server/users";
 
 export const metadata: Metadata = { title: "Markets" };
@@ -23,9 +23,13 @@ export default async function MarketsPage() {
   const source = portfolio.league.marketSource;
   const now = new Date();
 
-  const quotes = await getAllQuotes(source, now);
+  const [quotes, popular, universeCount] = await Promise.all([
+    getPopularQuotes(source, now),
+    popularInstruments(),
+    countInstruments(),
+  ]);
   const rows: MarketRow[] = await Promise.all(
-    UNIVERSE.map(async (def) => {
+    popular.map(async (def) => {
       const history = await getHistory(def.symbol, source, "1D", now);
       return {
         symbol: def.symbol,
@@ -47,7 +51,12 @@ export default async function MarketsPage() {
         </div>
         <MarketStatusPill status={serializeStatus(marketStatus(source, now))} realQuotes={usesRealQuotes(source)} />
       </header>
-      <MarketsTable rows={rows} initialQuotes={[...quotes.values()].map(serializeQuote)} source={source} />
+      <MarketsTable
+        rows={rows}
+        initialQuotes={[...quotes.values()].map(serializeQuote)}
+        source={source}
+        universeCount={universeCount}
+      />
     </div>
   );
 }

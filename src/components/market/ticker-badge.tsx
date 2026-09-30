@@ -17,7 +17,7 @@ export function TickerBadge({ symbol, className }: { symbol: string; className?:
         boxShadow: `inset 0 0 0 1px oklch(0.5 0.08 ${hue} / 0.35)`,
       }}
     >
-      {symbol.slice(0, 4)}
+      {symbol.replace(".", "").slice(0, 4)}
     </span>
   );
 }

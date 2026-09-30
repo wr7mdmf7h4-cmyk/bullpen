@@ -8,14 +8,14 @@ import { Sparkline } from "@/components/market/sparkline";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
 import { simulatedHistory, simulatedQuote } from "@/domain/market/simulated";
-import { getInstrument, UNIVERSE } from "@/domain/market/universe";
+import { getPopularInstrument, POPULAR } from "@/domain/market/universe";
 import { getCurrentUser } from "@/server/users";
 
 const FEATURES = [
   {
     icon: BarChart3,
     title: "Real stocks",
-    text: "~50 of the most-traded US stocks and ETFs, from NVDA to KO, with live quotes when the market's open.",
+    text: "Every US-listed stock and ETF, about 12,000 of them, from NVDA to BRK.B, with live quotes when the market's open.",
   },
   {
     icon: Receipt,
@@ -54,9 +54,9 @@ export default async function LandingPage() {
   const user = await getCurrentUser();
   const now = new Date();
   // The ticker uses the deterministic simulation: no API key or DB round trip needed.
-  const quotes = UNIVERSE.slice(0, 24).map((d) => simulatedQuote(d, "ALWAYS", now));
+  const quotes = POPULAR.slice(0, 24).map((d) => simulatedQuote(d, "ALWAYS", now));
   // Illustrative hero chart: real simulated wiggles, tilted to match the +18% headline.
-  const raw = simulatedHistory(getInstrument("NVDA")!, "ALWAYS", "1M", now).map((p) => p.p);
+  const raw = simulatedHistory(getPopularInstrument("NVDA")!, "ALWAYS", "1M", now).map((p) => p.p);
   const hero = raw.map((p, i) => p * (1 + (0.35 * i) / raw.length));
 
   return (

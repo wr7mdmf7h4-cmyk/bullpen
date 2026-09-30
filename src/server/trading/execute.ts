@@ -1,11 +1,12 @@
 import "server-only";
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "../db";
-import { getQuote } from "../market";
+import { getQuote, usesRealQuotes } from "../market";
+import { findInstrument } from "../instruments";
 import { ensureReferenceData } from "../reference-data";
 import { leagueStatus, formatDuration } from "@/domain/leagues";
 import { marketClosedMessage, marketStatus } from "@/domain/market/status";
-import { applyBuy, applySell, exceedsSlippage, validateOrder, type Side } from "@/domain/trading";
+import { applyBuy, applySell, exceedsSlippage, isExecutableQuote, validateOrder, type Side } from "@/domain/trading";
 import type { ActivityPayload } from "@/domain/activity";
 import { formatCents } from "@/domain/money";
 
@@ -15,6 +16,9 @@ export type TradeErrorCode =
   | "LEAGUE_ENDED"
   | "MARKET_CLOSED"
   | "PRICE_MOVED"
+  | "UNKNOWN_SYMBOL"
+  | "NOT_TRADABLE"
+  | "PRICE_UNAVAILABLE"
   | "INVALID_QUANTITY"
   | "ORDER_TOO_LARGE"
   | "INSUFFICIENT_FUNDS"
@@ -110,7 +114,21 @@ export async function executeTrade(req: TradeRequest): Promise<TradeResult> {
     });
   }
 
-  const quote = await getQuote(req.symbol, league.marketSource, now);
+  const instrument = await findInstrument(req.symbol);
+  if (!instrument) throw new TradeError("UNKNOWN_SYMBOL", `${req.symbol} isn't a US-listed stock or ETF.`);
+  if (!instrument.isActive) {
+    throw new TradeError("NOT_TRADABLE", `${instrument.symbol} is no longer listed and can't be traded.`);
+  }
+
+  const quote = await getQuote(instrument.symbol, league.marketSource, now);
+  // With real quotes on, never fill at a made-up or stale price: an obscure
+  // ticker falling back to the simulation would otherwise be free money.
+  if (!isExecutableQuote(quote, { realQuotes: usesRealQuotes(league.marketSource), now })) {
+    throw new TradeError(
+      "PRICE_UNAVAILABLE",
+      `We couldn't get a live price for ${instrument.symbol} right now. Please try again in a minute.`,
+    );
+  }
   if (exceedsSlippage(req.expectedPriceCents, quote.priceCents)) {
     throw new TradeError(
       "PRICE_MOVED",

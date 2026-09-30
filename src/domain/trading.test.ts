@@ -5,6 +5,7 @@ import {
   applySell,
   averageCostCents,
   exceedsSlippage,
+  isExecutableQuote,
   maxAffordableShares,
   quoteOrder,
   validateOrder,
@@ -136,5 +137,27 @@ describe("exceedsSlippage", () => {
     expect(exceedsSlippage(10_000, 10_150)).toBe(false); // 1.5%
     expect(exceedsSlippage(10_000, 10_300)).toBe(true); // 3%
     expect(exceedsSlippage(10_000, 9_700)).toBe(true); // -3%
+  });
+});
+
+describe("isExecutableQuote", () => {
+  const now = new Date("2026-06-15T15:00:00Z");
+  const ago = (ms: number) => new Date(now.getTime() - ms);
+
+  it("accepts anything when the league runs on simulated prices", () => {
+    expect(isExecutableQuote({ source: "simulated", asOf: ago(0) }, { realQuotes: false, now })).toBe(true);
+  });
+
+  it("never fills a real-quote order at a simulated fallback price", () => {
+    expect(isExecutableQuote({ source: "simulated", asOf: ago(0) }, { realQuotes: true, now })).toBe(false);
+  });
+
+  it("accepts fresh cached quotes and rejects stale ones", () => {
+    expect(isExecutableQuote({ source: "cache", asOf: ago(60_000) }, { realQuotes: true, now })).toBe(true);
+    expect(isExecutableQuote({ source: "cache", asOf: ago(3 * 60_000) }, { realQuotes: true, now })).toBe(false);
+  });
+
+  it("accepts live provider quotes", () => {
+    expect(isExecutableQuote({ source: "finnhub", asOf: ago(10 * 60_000) }, { realQuotes: true, now })).toBe(true);
   });
 });

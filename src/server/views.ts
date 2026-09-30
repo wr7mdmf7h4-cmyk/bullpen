@@ -2,7 +2,7 @@ import "server-only";
 import { db } from "./db";
 import { getQuotes, usesRealQuotes } from "./market";
 import { getPortfolioDetail, getPortfolioHistory, getStartOfDayValue, valuePortfolioNow } from "./portfolio";
-import { getInstrument } from "@/domain/market/universe";
+import { findInstruments } from "./instruments";
 import { marketStatus } from "@/domain/market/status";
 import { sectorAllocation } from "@/domain/portfolio";
 import { serializeQuote } from "@/lib/serialize";
@@ -17,12 +17,18 @@ export async function loadPortfolioOverview(portfolioId: string, now = new Date(
     valuePortfolioNow(p, now),
     getPortfolioHistory(p.id, "1D", now),
   ]);
-  const startOfDayCents = await getStartOfDayValue(p.id, valuation.totalValueCents, now);
+  const [startOfDayCents, instruments] = await Promise.all([
+    getStartOfDayValue(p.id, valuation.totalValueCents, now),
+    findInstruments(symbols),
+  ]);
 
   return {
     detail: p,
     valuation,
-    allocation: sectorAllocation(valuation.positions, (s) => getInstrument(s)?.sector ?? "Other"),
+    allocation: sectorAllocation(valuation.positions, (s) => {
+      const sector = instruments.get(s)?.sector;
+      return !sector || sector === "Unknown" ? "Other" : sector;
+    }),
     props: {
       portfolioId: p.id,
       leagueName: p.league.name,
@@ -35,7 +41,7 @@ export async function loadPortfolioOverview(portfolioId: string, now = new Date(
         symbol: h.symbol,
         quantity: h.quantity,
         costBasisCents: h.costBasisCents,
-        name: getInstrument(h.symbol)?.name ?? h.symbol,
+        name: instruments.get(h.symbol)?.name ?? h.symbol,
       })),
       initialQuotes: [...quotes.values()].map(serializeQuote),
       startOfDayCents,

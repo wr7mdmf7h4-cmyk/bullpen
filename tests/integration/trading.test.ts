@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/server/db";
 import { executeTrade, TradeError } from "@/server/trading/execute";
 import { getQuote } from "@/server/market";
+import { invalidateInstruments } from "@/server/instruments";
 import { quoteOrder } from "@/domain/trading";
 
 /**
@@ -156,5 +157,58 @@ describe("trading engine (integration)", () => {
         now: NOW,
       }),
     ).rejects.toMatchObject({ code: "LEAGUE_NOT_STARTED" });
+  });
+  it("trades any listed symbol, not just the popular list", async () => {
+    await db.instrument.upsert({
+      where: { symbol: "ZZTEST" },
+      create: { symbol: "ZZTEST", name: "Zeta Test Corp", exchange: "NYSE" },
+      update: { isActive: true },
+    });
+    invalidateInstruments();
+    const price = (await getQuote("ZZTEST", "SIMULATED", NOW)).priceCents;
+    const { user, league, portfolio } = await createPlayer(1_000_000);
+    const res = await executeTrade({
+      userId: user.id,
+      leagueId: league.id,
+      symbol: "ZZTEST",
+      side: "BUY",
+      quantity: 2,
+      expectedPriceCents: price,
+      idempotencyKey: crypto.randomUUID(),
+      now: NOW,
+    });
+    expect(res.trade.priceCents).toBe(price);
+    const holding = await db.holding.findUnique({
+      where: { portfolioId_symbol: { portfolioId: portfolio.id, symbol: "ZZTEST" } },
+    });
+    expect(holding?.quantity).toBe(2);
+  });
+
+  it("refuses unknown and delisted symbols", async () => {
+    await db.instrument.upsert({
+      where: { symbol: "ZZGONE" },
+      create: { symbol: "ZZGONE", name: "Gone Corp", exchange: "NYSE", isActive: false },
+      update: { isActive: false },
+    });
+    invalidateInstruments();
+    const { user, league } = await createPlayer(1_000_000);
+    const base = {
+      userId: user.id,
+      leagueId: league.id,
+      side: "BUY" as const,
+      quantity: 1,
+      expectedPriceCents: 1,
+      now: NOW,
+    };
+    await expect(
+      executeTrade({ ...base, symbol: "ZZGONE", idempotencyKey: crypto.randomUUID() }),
+    ).rejects.toMatchObject({
+      code: "NOT_TRADABLE",
+    });
+    await expect(executeTrade({ ...base, symbol: "NOPEX", idempotencyKey: crypto.randomUUID() })).rejects.toMatchObject(
+      {
+        code: "UNKNOWN_SYMBOL",
+      },
+    );
   });
 });

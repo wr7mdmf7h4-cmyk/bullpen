@@ -43,3 +43,32 @@ test("demo user can buy a stock and see it in their portfolio", async ({ page })
   await expect(page.getByRole("link", { name: /KO/ }).first()).toBeVisible();
   await expect(page.getByText(/Bought 1\s+KO/).first()).toBeVisible();
 });
+
+test("any US-listed stock can be found with ⌘K search and bought", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Try the demo" }).first().click();
+  await expect(page).toHaveURL(/\/dashboard/);
+  await page
+    .getByRole("button", { name: /League|Practice|Club/ })
+    .first()
+    .click();
+  await page.getByRole("menuitem", { name: /24\/7 Practice/ }).click();
+  await expect(page.getByRole("button", { name: /24\/7 Practice/ })).toBeVisible();
+
+  // HOOD isn't in the curated popular list: it comes from the full universe.
+  await page.getByRole("button", { name: "Search stocks" }).click();
+  await page.getByRole("combobox").fill("robinhood");
+  await page.getByRole("option", { name: /HOOD/ }).click();
+  await expect(page).toHaveURL(/\/stocks\/HOOD/);
+
+  const ticket = page.locator("div.surface", { has: page.getByRole("heading", { name: "Trade HOOD" }) });
+  await ticket.getByLabel("Shares").fill("1");
+  await ticket.getByRole("button", { name: "Review buy" }).click();
+  const hold = page.getByRole("dialog").getByRole("button", { name: /Hold to buy/ });
+  const box = (await hold.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(1_300);
+  await page.mouse.up();
+  await expect(page.getByText(/Bought 1 HOOD at \$/)).toBeVisible();
+});

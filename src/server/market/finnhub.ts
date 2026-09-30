@@ -106,3 +106,14 @@ export async function fetchMetrics(symbol: string, apiKey: string): Promise<Fund
     dividendYieldPct: metric.dividendYieldIndicatedAnnual ?? null,
   };
 }
+
+const profileSchema = z.object({ finnhubIndustry: z.string().nullable(), name: z.string().nullable() }).partial();
+
+/** Company profile; used to classify a stock's sector the first time it's viewed. */
+export async function fetchProfile(
+  symbol: string,
+  apiKey: string,
+): Promise<{ industry: string | null; name: string | null }> {
+  const p = profileSchema.parse(await get(`/stock/profile2?symbol=${encodeURIComponent(symbol)}`, apiKey));
+  return { industry: p.finnhubIndustry ?? null, name: p.name ?? null };
+}

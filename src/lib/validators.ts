@@ -32,7 +32,7 @@ export const tickerSchema = z
   .string()
   .trim()
   .toUpperCase()
-  .regex(/^[A-Z.]{1,6}$/, "Invalid ticker");
+  .regex(/^[A-Z]{1,5}(\.[A-Z])?$/, "Invalid ticker");
 
 export const tradeSchema = z.object({
   leagueId: z.string().min(1).max(40),
