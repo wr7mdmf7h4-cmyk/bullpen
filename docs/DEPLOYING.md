@@ -28,7 +28,7 @@ Without a Finnhub key everything still works, but prices come from the built-in 
 2. In a terminal inside the project folder:
 
 ```bash
-git remote add origin https://github.com/YOUR_USERNAME/bullpen.git
+git remote add origin https://github.com/wr7mdmf7h4-cmyk/bullpen.git
 ```
 
 ```bash
@@ -162,7 +162,7 @@ Tip: check the **renewal** price, not just the first-year price, and turn on aut
 
 ## 8. Make it CV-ready
 
-- In `README.md`, replace `YOUR_GITHUB_USERNAME` and `YOUR-DEPLOYMENT` with your real values, then push.
+- In `README.md`, replace `YOUR-DEPLOYMENT` with your Vercel URL (or custom domain), then push.
 - On the GitHub repo page, click ⚙️ next to **About** and add a description, your Vercel URL as the website, and topics (`nextjs`, `typescript`, `postgres`, `prisma`, `trading`, `game`).
 - Check the **Actions** tab shows a green tick.
 - Optional: record a 10-second GIF of a profitable sell with confetti and add it to the top of the README.

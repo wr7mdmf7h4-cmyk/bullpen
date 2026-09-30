@@ -6,7 +6,7 @@
 
 A multiplayer paper-trading game: everyone starts with $10,000, trades real US stocks with realistic fees, and battles friends up live leaderboards.
 
-[![CI](https://github.com/YOUR_GITHUB_USERNAME/bullpen/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_GITHUB_USERNAME/bullpen/actions/workflows/ci.yml)
+[![CI](https://github.com/wr7mdmf7h4-cmyk/bullpen/actions/workflows/ci.yml/badge.svg)](https://github.com/wr7mdmf7h4-cmyk/bullpen/actions/workflows/ci.yml)
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)
 ![Postgres](https://img.shields.io/badge/Postgres-Neon-4169e1)
@@ -245,7 +245,7 @@ Realtime messages are **invalidations, not data** (â€œleague X changed, refetchâ
 Requirements: Node 22+ (24 recommended) and a Postgres database (a free [Neon](https://neon.tech) project works well).
 
 ```bash
-git clone https://github.com/YOUR_GITHUB_USERNAME/bullpen.git
+git clone https://github.com/wr7mdmf7h4-cmyk/bullpen.git
 cd bullpen
 npm install                  # also runs `prisma generate`
 cp .env.example .env         # then set DATABASE_URL and AUTH_SECRET
