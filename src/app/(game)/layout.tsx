@@ -1,17 +1,29 @@
 import { Logo } from "@/components/brand/logo";
 import { DesktopNav, MobileTabBar } from "@/components/shell/nav-links";
 import { UserMenu } from "@/components/shell/user-menu";
+import { LeagueSwitcher } from "@/components/shell/league-switcher";
+import { StockSearch } from "@/components/shell/stock-search";
+import { getActivePortfolio, getMyPortfolios } from "@/server/leagues/active";
 import { requireUser } from "@/server/users";
 
 export default async function GameLayout({ children }: LayoutProps<"/">) {
   const user = await requireUser();
+  const [active, portfolios] = await Promise.all([getActivePortfolio(user.id), getMyPortfolios(user.id)]);
+  const leagues = portfolios.map(({ league }) => ({
+    id: league.id,
+    name: league.name,
+    kind: league.kind,
+    marketSource: league.marketSource,
+  }));
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur-xl">
         <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-4 px-4 sm:px-6">
-          <Logo href="/dashboard" />
+          <Logo href="/dashboard" className="[&>span]:hidden sm:[&>span]:inline" />
           <DesktopNav username={user.username} />
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex items-center gap-2">
+            <StockSearch />
+            <LeagueSwitcher leagues={leagues} activeId={active.leagueId} />
             <UserMenu username={user.username} avatarSeed={user.avatarSeed} isDemo={user.isDemo} />
           </div>
         </div>
