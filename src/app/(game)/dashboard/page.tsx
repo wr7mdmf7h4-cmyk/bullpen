@@ -64,7 +64,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
         )}
       </header>
 
-      <PortfolioOverview {...props} compact />
+      <PortfolioOverview key={props.portfolioId} {...props} compact />
 
       <div className="grid gap-10 lg:grid-cols-2">
         <section className="grid content-start gap-3" aria-labelledby="standings">

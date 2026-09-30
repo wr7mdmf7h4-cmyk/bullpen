@@ -7,10 +7,20 @@ import type { QuoteDTO } from "@/lib/serialize";
  * Keeps a set of quotes fresh by polling /api/quotes. Pauses while the tab is
  * hidden. Simulated prices tick every 5s; live quotes are cached ~15s upstream.
  */
+function toRecord(list: QuoteDTO[]) {
+  return Object.fromEntries(list.map((q) => [q.symbol, q]));
+}
+
 export function useLiveQuotes(initial: QuoteDTO[], source: "LIVE" | "SIMULATED", enabled = true) {
-  const [quotes, setQuotes] = useState<Record<string, QuoteDTO>>(() =>
-    Object.fromEntries(initial.map((q) => [q.symbol, q])),
-  );
+  const [quotes, setQuotes] = useState<Record<string, QuoteDTO>>(() => toRecord(initial));
+  // Fresh server data (router.refresh after a trade, or a league switch that
+  // changes the market source) replaces whatever we were holding. Done during
+  // render so there is never a frame of stale prices.
+  const [seen, setSeen] = useState({ initial, source });
+  if (seen.initial !== initial || seen.source !== source) {
+    setSeen({ initial, source });
+    setQuotes(toRecord(initial));
+  }
   const symbols = useMemo(
     () =>
       initial

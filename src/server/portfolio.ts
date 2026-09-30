@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "./db";
-import { getQuotes } from "./market";
+import { getHistory, getQuotes } from "./market";
 import { valuePortfolio, type PortfolioValuation } from "@/domain/portfolio";
 import { leagueStatus, type MarketSourceKind } from "@/domain/leagues";
 import type { ChartRange, PricePoint } from "@/domain/market/types";
@@ -94,8 +94,13 @@ const RANGE_MS: Record<ChartRange, number> = {
 };
 
 /**
- * Portfolio value over time: snapshots in the range, anchored at the start by
- * the last snapshot before it, and ending at the live value.
+ * Portfolio value over time.
+ *
+ * Since the last trade the holdings haven't changed, so for that window the
+ * value is *exactly* cash + Σ quantity × price(t): we rebuild it from each
+ * holding's price history at chart resolution. Before the last trade we use
+ * recorded snapshots (one per trade plus a daily cron), anchored at the range
+ * start by the last snapshot before it.
  */
 export async function getPortfolioHistory(
   portfolioId: string,
@@ -103,7 +108,7 @@ export async function getPortfolioHistory(
   now = new Date(),
 ): Promise<PricePoint[]> {
   const from = new Date(now.getTime() - RANGE_MS[range]);
-  const [before, inRange, detail] = await Promise.all([
+  const [before, inRange, detail, lastTrade] = await Promise.all([
     db.portfolioSnapshot.findFirst({
       where: { portfolioId, takenAt: { lt: from } },
       orderBy: { takenAt: "desc" },
@@ -114,13 +119,36 @@ export async function getPortfolioHistory(
       take: 2_000,
     }),
     getPortfolioDetail(portfolioId),
+    db.trade.findFirst({ where: { portfolioId }, orderBy: { executedAt: "desc" }, select: { executedAt: true } }),
   ]);
   const live = await valuePortfolioNow(detail, now);
+  const exactFrom = Math.max(from.getTime(), (lastTrade?.executedAt ?? detail.joinedAt).getTime());
 
   const points: PricePoint[] = [];
   if (before) points.push({ t: from.getTime(), p: before.totalValueCents });
-  for (const s of inRange) points.push({ t: s.takenAt.getTime(), p: s.totalValueCents });
+  for (const s of inRange)
+    if (s.takenAt.getTime() < exactFrom) points.push({ t: s.takenAt.getTime(), p: s.totalValueCents });
+
+  // Exact reconstruction since the last trade.
+  if (detail.holdings.length) {
+    const series = await Promise.all(
+      detail.holdings.map((h) => getHistory(h.symbol, detail.league.marketSource, range, now)),
+    );
+    const timeline = series[0]!.points;
+    const aligned = series.every((s) => s.points.length === timeline.length);
+    if (aligned) {
+      timeline.forEach((pt, i) => {
+        if (pt.t < exactFrom || pt.t >= now.getTime()) return;
+        const holdingsValue = detail.holdings.reduce((sum, h, j) => sum + h.quantity * series[j]!.points[i]!.p, 0);
+        points.push({ t: pt.t, p: detail.cashCents + holdingsValue });
+      });
+    }
+  } else {
+    points.push({ t: exactFrom, p: live.totalValueCents });
+  }
   points.push({ t: now.getTime(), p: live.totalValueCents });
+
+  points.sort((a, b) => a.t - b.t);
   // collapse duplicate timestamps (keep the latest value)
   return points.filter((pt, i) => i === points.length - 1 || points[i + 1]!.t !== pt.t);
 }

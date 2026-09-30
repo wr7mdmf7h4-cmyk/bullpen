@@ -27,7 +27,7 @@ export default async function PortfolioPage() {
         </p>
       </header>
 
-      <PortfolioOverview {...props} />
+      <PortfolioOverview key={props.portfolioId} {...props} />
 
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_320px]">
         <section className="grid content-start gap-3" aria-labelledby="history">

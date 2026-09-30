@@ -62,6 +62,7 @@ export default async function StockPage({ params }: PageProps<"/stocks/[symbol]"
             </div>
           </header>
           <StockChart
+            key={`${def.symbol}-${source}`}
             symbol={def.symbol}
             name={def.name}
             source={source}
