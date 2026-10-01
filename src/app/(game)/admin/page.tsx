@@ -5,11 +5,13 @@ import { Input } from "@/components/ui/input";
 import { LiveRefresh } from "@/components/admin/live-refresh";
 import { DeleteLeagueButton, RemovePlayerButton } from "@/components/admin/moderation-buttons";
 import { SignupsChart } from "@/components/admin/signups-chart";
+import { TrafficSection } from "@/components/admin/traffic-section";
 import { ADMIN_TIME_ZONE } from "@/domain/admin";
 import { formatCents } from "@/domain/money";
 import { timeAgo } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { CHART_DAYS, getAdminStats, LIST_LIMIT, requireAdmin } from "@/server/admin";
+import { getTrafficStats } from "@/server/analytics";
 
 export const metadata: Metadata = { title: "Admin", robots: { index: false, follow: false } };
 
@@ -53,8 +55,12 @@ function UserLink({ username }: { username: string | null }) {
 export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
   const admin = await requireAdmin();
   const { q } = await searchParams;
-  const stats = await getAdminStats({ query: typeof q === "string" ? q : "" });
-  const now = stats.generatedAt.getTime();
+  const now = new Date();
+  const [stats, traffic] = await Promise.all([
+    getAdminStats({ now, query: typeof q === "string" ? q : "" }),
+    getTrafficStats(now),
+  ]);
+  const nowMs = stats.generatedAt.getTime();
   const { totals } = stats;
   const updatedAt = stats.generatedAt.toLocaleTimeString("en-GB", { timeZone: ADMIN_TIME_ZONE });
 
@@ -93,6 +99,8 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
         </div>
       </Section>
 
+      <TrafficSection traffic={traffic} now={stats.generatedAt} />
+
       <div className="grid gap-10 lg:grid-cols-2">
         <Section title="Online now" aside="Active in the last 10 minutes">
           {stats.onlineUsers.length ? (
@@ -104,7 +112,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
                     <UserLink username={u.username} />
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {u.lastSeenAt ? timeAgo(u.lastSeenAt.getTime(), now) : ""}
+                    {u.lastSeenAt ? timeAgo(u.lastSeenAt.getTime(), nowMs) : ""}
                   </span>
                 </li>
               ))}
@@ -134,7 +142,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
                   </div>
                   <div className="flex justify-between gap-3 text-xs text-muted-foreground">
                     <span className="truncate">{t.league}</span>
-                    <span className="shrink-0">{timeAgo(t.executedAt.getTime(), now)}</span>
+                    <span className="shrink-0">{timeAgo(t.executedAt.getTime(), nowMs)}</span>
                   </div>
                 </li>
               ))}
@@ -187,10 +195,10 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
                     </td>
                     <td className="max-w-[14rem] truncate px-4 py-2.5 text-muted-foreground">{u.email}</td>
                     <td className="px-4 py-2.5 whitespace-nowrap text-muted-foreground">
-                      {timeAgo(u.createdAt.getTime(), now)}
+                      {timeAgo(u.createdAt.getTime(), nowMs)}
                     </td>
                     <td className="px-4 py-2.5 whitespace-nowrap text-muted-foreground">
-                      {u.lastSeenAt ? timeAgo(u.lastSeenAt.getTime(), now) : "—"}
+                      {u.lastSeenAt ? timeAgo(u.lastSeenAt.getTime(), nowMs) : "—"}
                     </td>
                     <td className="num px-4 py-2.5 text-right">{number.format(u.trades)}</td>
                     <td className="px-2 py-1 text-right whitespace-nowrap">
@@ -224,7 +232,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
                   <span className="truncate font-medium">{l.name}</span>
                   <span className="truncate text-xs text-muted-foreground">
                     {l.host ? `Host @${l.host}` : "No host"} · {number.format(l.players)}{" "}
-                    {l.players === 1 ? "player" : "players"} · created {timeAgo(l.createdAt.getTime(), now)}
+                    {l.players === 1 ? "player" : "players"} · created {timeAgo(l.createdAt.getTime(), nowMs)}
                   </span>
                 </div>
                 <DeleteLeagueButton leagueId={l.id} name={l.name} players={l.players} />

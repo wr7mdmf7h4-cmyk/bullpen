@@ -63,6 +63,7 @@ A multiplayer paper-trading game: everyone starts with $10,000, trades real US s
 **Admin**
 
 - `/admin`, visible only to the emails in `ADMIN_EMAILS` (a 404 for everyone else): players, sign-ups (24h / 7d / 30d and a 30-day chart), who's online now, active users, latest trades and a searchable player list, refreshing itself every 10 seconds
+- Site traffic on `/admin`: visitors and page views (24h / 7d / 30d), an hourly or daily chart, top pages, where visitors came from, countries and devices, and a table of recent visits. No cookies and no IP addresses stored (a daily-rotating anonymous hash counts unique visitors), bots and Do Not Track / Global Privacy Control browsers are skipped, and data older than 90 days is pruned by the daily cron
 - Moderation from `/admin`: remove a player (typed-username confirmation; their leagues pass to the next member or are deleted when empty) or delete a private league
 
 ---

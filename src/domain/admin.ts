@@ -24,7 +24,7 @@ export function dayKey(d: Date, timeZone = ADMIN_TIME_ZONE): string {
 }
 
 /** The `days` calendar days ending today, oldest first. */
-function lastDays(now: Date, days: number, timeZone: string): string[] {
+export function lastDays(now: Date, days: number, timeZone: string): string[] {
   const today = new Date(`${dayKey(now, timeZone)}T00:00:00Z`);
   return Array.from({ length: days }, (_, i) => {
     const d = new Date(today);

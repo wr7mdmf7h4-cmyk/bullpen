@@ -46,6 +46,7 @@ model User {
   ownedLeagues League[]          @relation("LeagueOwner")
   achievements UserAchievement[]
   activity     ActivityEvent[]
+  pageViews    PageView[]
 
   @@index([lastSeenAt])
   @@index([createdAt])
@@ -257,4 +258,30 @@ model HistoryBackfill {
   fetchedAt  DateTime
 
   @@id([symbol, resolution])
+}
+
+/// One page view on the site (admin traffic stats). No cookies and no IP
+/// addresses are stored: visitors are counted with a hash of IP + browser +
+/// a secret salt that changes every day, so a person can't be followed from
+/// one day to the next. Rows older than 90 days are pruned by the daily cron.
+model PageView {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  /// pathname only, no query string
+  path        String
+  /// daily-rotating anonymous visitor hash
+  visitorHash String
+  /// set when the visitor was logged in
+  userId      String?
+  /// other website's host name, e.g. "google.com"
+  referrer    String?
+  /// ISO country code from the hosting edge
+  country     String?
+  /// mobile | tablet | desktop
+  device      String
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([path, createdAt])
 }
