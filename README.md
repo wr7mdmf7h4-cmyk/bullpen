@@ -55,8 +55,9 @@ A multiplayer paper-trading game: everyone starts with $10,000, trades real US s
 
 **Accounts**
 
-- Email + password (argon2id), optional Google OAuth, username onboarding, generated avatars (DiceBear, rendered locally)
+- Email + password (argon2id), optional Google OAuth, username onboarding, generated avatars (DiceBear, rendered locally; Fun Emoji by Davis Uche and Adventurer Neutral by Lisa Wischofsky are CC BY 4.0, the other styles CC0 or free to use)
 - Public profile pages with stats, standings in every league, badges and trade history
+- Profile customisation: 8 avatar styles with shuffle, display name, bio, banner colour, favourite stock and a showcase badge, with a live preview while editing
 - Each account remembers which league it's viewing (on every device), defaulting to the one used most recently
 
 **Admin**

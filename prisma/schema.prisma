@@ -26,6 +26,14 @@ model User {
   /// seed for the generated DiceBear avatar
   avatarSeed     String
   bio            String?
+  /// optional name shown above the @username on the profile
+  displayName    String?
+  /// profile banner colour id (src/domain/profile.ts ACCENTS)
+  accentColor    String?
+  /// ticker shown on the profile
+  favoriteSymbol String?
+  /// achievement key pinned next to the name (must be unlocked)
+  featuredBadge  String?
   /// the league the app shows (picked in the header switcher); null = most recently used
   activeLeagueId String?
   activeLeague   League?   @relation("ActiveLeague", fields: [activeLeagueId], references: [id], onDelete: SetNull)

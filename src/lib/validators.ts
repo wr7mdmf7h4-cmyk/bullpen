@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ACCENTS, AVATAR_STYLES, BIO_MAX, DISPLAY_NAME_MAX, type AccentId, type AvatarStyle } from "@/domain/profile";
 
 /** Shared Zod schemas: used by Server Actions and by forms for inline errors. */
 
@@ -74,7 +75,49 @@ export const inviteCodeSchema = z
   .toUpperCase()
   .regex(/^[A-Z0-9]{6,10}$/, "Invalid invite code");
 
-export const bioSchema = z.string().trim().max(160, "At most 160 characters");
+// Strip control characters (zero-width tricks, bells…) from text other players see.
+const CONTROL_CHARS = /[\u0000-\u0009\u000B-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2066-\u2069]/g;
+const cleanText = (v: string) =>
+  v
+    .replace(CONTROL_CHARS, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+export const bioSchema = z
+  .string()
+  .transform(cleanText)
+  .pipe(z.string().max(BIO_MAX, `At most ${BIO_MAX} characters`));
+
+const emptyToNull = (v: string) => (v === "" ? null : v);
+
+export const profileSchema = z.object({
+  displayName: z
+    .string()
+    .transform((v) => cleanText(v).replace(/\s+/g, " "))
+    .pipe(z.string().max(DISPLAY_NAME_MAX, `At most ${DISPLAY_NAME_MAX} characters`))
+    .transform(emptyToNull),
+  bio: bioSchema.transform(emptyToNull),
+  avatarStyle: z.enum(AVATAR_STYLES.map((s) => s.id) as [AvatarStyle, ...AvatarStyle[]]),
+  avatarSeed: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, "Invalid avatar"),
+  accentColor: z
+    .enum(ACCENTS.map((a) => a.id) as [AccentId, ...AccentId[]])
+    .nullable()
+    .catch(null),
+  favoriteSymbol: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .transform(emptyToNull)
+    .pipe(
+      z
+        .string()
+        .regex(/^[A-Z]{1,5}(\.[A-Z])?$/, "Enter a ticker like NVDA")
+        .nullable(),
+    ),
+  featuredBadge: z.string().max(40).nullable(),
+});
+
+export type ProfileInput = z.input<typeof profileSchema>;
 
 export type FieldErrors = Partial<Record<string, string[]>>;
 

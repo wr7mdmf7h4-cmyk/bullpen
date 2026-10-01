@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Gauge, LogOut, User } from "lucide-react";
+import { Gauge, LogOut, Pencil, User } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,6 +38,11 @@ export function UserMenu({
         <DropdownMenuItem asChild>
           <Link href={`/u/${username}`}>
             <User /> Profile
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/profile/edit">
+            <Pencil /> Edit profile
           </Link>
         </DropdownMenuItem>
         {isAdmin && (

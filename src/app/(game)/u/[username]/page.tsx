@@ -1,13 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Pencil } from "lucide-react";
 import { AchievementGrid } from "@/components/achievements/achievement-grid";
 import { RankBadge } from "@/components/portfolio/rank-badge";
 import { TradeHistory } from "@/components/trade/trade-history";
+import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
 import { toneClass } from "@/components/market/delta";
 import { ACHIEVEMENTS } from "@/domain/achievements";
 import { formatBps, formatCents } from "@/domain/money";
+import { accentColor } from "@/domain/profile";
 import { usernameLookupSchema } from "@/lib/validators";
 import { cn } from "@/lib/utils";
 import { db } from "@/server/db";
@@ -60,23 +63,74 @@ export default async function ProfilePage({ params }: PageProps<"/u/[username]">
   );
   const unlocked = new Map(user.achievements.map((a) => [a.achievementKey, a.unlockedAt]));
   const isMe = viewer.id === user.id;
+  const accent = accentColor(user.accentColor);
+  const featured = unlocked.has(user.featuredBadge ?? "")
+    ? ACHIEVEMENTS.find((a) => a.key === user.featuredBadge)
+    : undefined;
+  const favorite = user.favoriteSymbol;
 
   return (
     <div className="grid gap-10">
-      <header className="flex flex-wrap items-center gap-5">
-        <UserAvatar seed={user.avatarSeed} name={user.username} className="size-20 ring-2 ring-primary/30" />
-        <div className="grid gap-1.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-3xl font-semibold tracking-tight">@{user.username}</h1>
-            {Number.isFinite(bestReturn) && bestReturn > Number.MIN_SAFE_INTEGER && (
-              <RankBadge returnBps={bestReturn} />
-            )}
-            {isMe && <span className="rounded bg-primary/15 px-1.5 text-[10px] font-semibold text-primary">YOU</span>}
+      <header className="surface relative overflow-hidden p-5 sm:p-6">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-24"
+          style={{
+            background: `linear-gradient(100deg, ${accent ?? "var(--primary)"}, transparent 75%)`,
+            opacity: accent ? 0.55 : 0.12,
+          }}
+        />
+        <div className="relative flex flex-wrap items-end gap-5 pt-8">
+          <UserAvatar seed={user.avatarSeed} name={user.username} className="size-20 ring-4 ring-surface" />
+          <div className="grid min-w-0 flex-1 gap-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="truncate text-3xl font-semibold tracking-tight">
+                {user.displayName ?? `@${user.username}`}
+              </h1>
+              {Number.isFinite(bestReturn) && bestReturn > Number.MIN_SAFE_INTEGER && (
+                <RankBadge returnBps={bestReturn} />
+              )}
+              {isMe && <span className="rounded bg-primary/15 px-1.5 text-[10px] font-semibold text-primary">YOU</span>}
+            </div>
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+              {user.displayName && <span className="text-foreground/80">@{user.username}</span>}
+              {user.displayName && <span aria-hidden>·</span>}
+              <span>
+                Trading since {monthFmt.format(user.createdAt)} · {unlocked.size}/{ACHIEVEMENTS.length} badges
+              </span>
+            </p>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Trading since {monthFmt.format(user.createdAt)} · {unlocked.size}/{ACHIEVEMENTS.length} badges
-          </p>
+          {isMe && (
+            <Button asChild variant="secondary" size="sm" className="rounded-full">
+              <Link href="/profile/edit">
+                <Pencil /> Edit profile
+              </Link>
+            </Button>
+          )}
         </div>
+        {(user.bio || featured || favorite) && (
+          <div className="relative mt-4 grid gap-3">
+            {user.bio && <p className="max-w-prose text-sm whitespace-pre-line">{user.bio}</p>}
+            {(featured || favorite) && (
+              <div className="flex flex-wrap gap-2 text-sm">
+                {featured && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border bg-background/40 px-3 py-1">
+                    <span aria-hidden>{featured.emoji}</span> {featured.name}
+                  </span>
+                )}
+                {favorite && (
+                  <Link
+                    href={`/stocks/${favorite}`}
+                    className="inline-flex items-center gap-1.5 rounded-full border bg-background/40 px-3 py-1 hover:border-primary/60"
+                  >
+                    <span className="text-muted-foreground">Favourite</span>
+                    <span className="font-mono font-semibold">{favorite}</span>
+                  </Link>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </header>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

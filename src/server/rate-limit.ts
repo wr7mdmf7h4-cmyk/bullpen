@@ -19,6 +19,7 @@ export const RATE_LIMITS = {
   auth: { limit: 10, windowSeconds: 60 },
   signup: { limit: 5, windowSeconds: 600 },
   leagueWrite: { limit: 10, windowSeconds: 600 },
+  profile: { limit: 20, windowSeconds: 600 },
 } satisfies Record<string, Rule>;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;
