@@ -4,6 +4,7 @@ import { InviteLink } from "@/components/league/invite-link";
 import { LeagueLive } from "@/components/league/league-live";
 import { LeagueStatusBadge } from "@/components/league/league-status";
 import { LeaveLeagueButton } from "@/components/league/leave-league-button";
+import { RenameLeagueButton } from "@/components/league/rename-league-button";
 import { describeFees } from "@/domain/fees";
 import { formatCents } from "@/domain/money";
 import { features } from "@/server/env";
@@ -30,7 +31,12 @@ export default async function LeaguePage({ params }: PageProps<"/leagues/[id]">)
         <div className="flex flex-wrap items-center gap-2">
           <LeagueStatusBadge league={league} now={now} />
         </div>
-        <h1 className="text-3xl font-semibold tracking-tight">{league.name}</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="min-w-0 text-3xl font-semibold tracking-tight break-words">{league.name}</h1>
+          {league.kind === "PRIVATE" && league.ownerId === user.id && (
+            <RenameLeagueButton key={league.name} leagueId={league.id} leagueName={league.name} />
+          )}
+        </div>
         <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">
           <div>
             <dt className="inline">Starting cash </dt>

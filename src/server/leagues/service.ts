@@ -74,6 +74,23 @@ export async function getLeagueForMember(leagueId: string, userId: string) {
   return portfolio;
 }
 
+export class RenameError extends Error {}
+
+/** Renames a private league. Only its current owner may; the Global League keeps its name. */
+export async function renameLeague(userId: string, leagueId: string, name: string) {
+  const league = await db.league.findUnique({ where: { id: leagueId }, select: { kind: true, ownerId: true } });
+  if (!league) throw new RenameError("That league doesn't exist.");
+  if (league.kind === "GLOBAL") throw new RenameError("The Global League can't be renamed.");
+  if (league.ownerId !== userId) throw new RenameError("Only the league's host can rename it.");
+  // Re-check ownership in the write itself, in case it changed hands meanwhile.
+  const { count } = await db.league.updateMany({
+    where: { id: leagueId, kind: "PRIVATE", ownerId: userId },
+    data: { name },
+  });
+  if (!count) throw new RenameError("Only the league's host can rename it.");
+  return { id: leagueId, name };
+}
+
 export class LeaveError extends Error {}
 
 /**

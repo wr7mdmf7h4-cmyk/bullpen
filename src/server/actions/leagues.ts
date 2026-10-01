@@ -9,10 +9,18 @@ import { invalidateLeaderboard } from "../leaderboard";
 import { notifyLeague } from "../realtime";
 import { setActiveLeague } from "../leagues/active";
 import { LeagueFullError } from "../leagues/membership";
-import { createLeague, joinByInvite, JoinError, leaveLeague, LeaveError } from "../leagues/service";
+import {
+  createLeague,
+  joinByInvite,
+  JoinError,
+  leaveLeague,
+  LeaveError,
+  renameLeague,
+  RenameError,
+} from "../leagues/service";
 import { rateLimit } from "../rate-limit";
 import { requireUser } from "../users";
-import { createLeagueSchema, inviteCodeSchema, type ActionResult } from "@/lib/validators";
+import { createLeagueSchema, inviteCodeSchema, leagueNameSchema, type ActionResult } from "@/lib/validators";
 
 export async function setActiveLeagueAction(leagueId: string): Promise<ActionResult> {
   const user = await requireUser();
@@ -66,6 +74,30 @@ export async function joinLeagueAction(_prev: ActionResult | undefined, formData
   await setActiveLeague(user.id, leagueId);
   revalidatePath("/", "layout");
   redirect(`/leagues/${leagueId}?joined=1`);
+}
+
+export async function renameLeagueAction(leagueId: string, name: string): Promise<ActionResult> {
+  const user = await requireUser();
+  const limit = await rateLimit("leagueWrite", user.id);
+  if (!limit.ok) return { ok: false, error: `Slow down. Try again in ${limit.retryAfterSeconds}s.` };
+
+  const id = z.string().min(1).max(40).parse(leagueId);
+  const parsed = leagueNameSchema.safeParse(name);
+  if (!parsed.success) {
+    const message = parsed.error.issues[0]?.message ?? "Invalid name";
+    return { ok: false, error: message, fieldErrors: { name: [message] } };
+  }
+  try {
+    await renameLeague(user.id, id, parsed.data);
+  } catch (err) {
+    if (err instanceof RenameError) return { ok: false, error: err.message };
+    throw err;
+  }
+  invalidateLeaderboard(id);
+  await notifyLeague(id, "leaderboard");
+  // The name appears in the header switcher, the leagues list and this page.
+  revalidatePath("/", "layout");
+  return { ok: true };
 }
 
 export async function leaveLeagueAction(leagueId: string): Promise<ActionResult> {

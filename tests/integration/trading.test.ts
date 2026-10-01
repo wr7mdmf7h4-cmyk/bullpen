@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/server/db";
 import { executeTrade, TradeError } from "@/server/trading/execute";
-import { leaveLeague, LeaveError } from "@/server/leagues/service";
+import { leaveLeague, LeaveError, renameLeague, RenameError } from "@/server/leagues/service";
 import { getQuote } from "@/server/market";
 import { invalidateInstruments } from "@/server/instruments";
 import { quoteOrder } from "@/domain/trading";
@@ -266,5 +266,33 @@ describe("trading engine (integration)", () => {
     });
     await db.portfolio.create({ data: { userId: user.id, leagueId: "global", cashCents: 1_000_000 } });
     await expect(leaveLeague(user.id, "global")).rejects.toBeInstanceOf(LeaveError);
+  });
+
+  it("lets only the owner rename a private league", async () => {
+    const owner = await createPlayer(1_000_000);
+    await db.league.update({ where: { id: owner.league.id }, data: { ownerId: owner.user.id } });
+    const friend = await db.user.create({
+      data: { email: `f${Math.random()}@test.dev`, username: `f${Math.floor(Math.random() * 1e9)}`, avatarSeed: "y" },
+    });
+    await db.portfolio.create({ data: { userId: friend.id, leagueId: owner.league.id, cashCents: 1_000_000 } });
+
+    await expect(renameLeague(owner.user.id, owner.league.id, "Dad vs Son")).resolves.toMatchObject({
+      name: "Dad vs Son",
+    });
+    expect((await db.league.findUniqueOrThrow({ where: { id: owner.league.id } })).name).toBe("Dad vs Son");
+
+    await expect(renameLeague(friend.id, owner.league.id, "Hijacked")).rejects.toBeInstanceOf(RenameError);
+    await expect(renameLeague(owner.user.id, "no-such-league", "Nope")).rejects.toBeInstanceOf(RenameError);
+    expect((await db.league.findUniqueOrThrow({ where: { id: owner.league.id } })).name).toBe("Dad vs Son");
+  });
+
+  it("does not allow renaming the Global league", async () => {
+    const { user } = await createPlayer(1_000_000);
+    await db.league.upsert({
+      where: { id: "global" },
+      create: { id: "global", kind: "GLOBAL", name: "Global League", startsAt: new Date("2026-01-01") },
+      update: {},
+    });
+    await expect(renameLeague(user.id, "global", "Mine now")).rejects.toBeInstanceOf(RenameError);
   });
 });

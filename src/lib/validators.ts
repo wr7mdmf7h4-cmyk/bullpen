@@ -51,9 +51,11 @@ export const tradeSchema = z.object({
   idempotencyKey: z.uuid(),
 });
 
+export const leagueNameSchema = z.string().trim().min(3, "At least 3 characters").max(40, "At most 40 characters");
+
 export const createLeagueSchema = z
   .object({
-    name: z.string().trim().min(3, "At least 3 characters").max(40, "At most 40 characters"),
+    name: leagueNameSchema,
     startsAt: z.coerce.date(),
     endsAt: z.coerce.date(),
     startingCashDollars: z.coerce.number().int().min(1_000, "At least $1,000").max(1_000_000, "At most $1,000,000"),
