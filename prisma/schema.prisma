@@ -17,10 +17,10 @@ datasource db {
 // ─────────────────────────── Users ───────────────────────────
 
 model User {
-  id             String   @id @default(cuid())
-  email          String   @unique
+  id             String    @id @default(cuid())
+  email          String    @unique
   /// null until the user picks one (Google sign-ups go through /onboarding)
-  username       String?  @unique
+  username       String?   @unique
   /// argon2id hash; null for Google-only accounts
   passwordHash   String?
   /// seed for the generated DiceBear avatar
@@ -28,14 +28,19 @@ model User {
   bio            String?
   /// the league the app shows (picked in the header switcher); null = most recently used
   activeLeagueId String?
-  activeLeague   League?  @relation("ActiveLeague", fields: [activeLeagueId], references: [id], onDelete: SetNull)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  activeLeague   League?   @relation("ActiveLeague", fields: [activeLeagueId], references: [id], onDelete: SetNull)
+  /// last request while logged in, refreshed at most every couple of minutes (admin "online now")
+  lastSeenAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   portfolios   Portfolio[]
   ownedLeagues League[]          @relation("LeagueOwner")
   achievements UserAchievement[]
   activity     ActivityEvent[]
+
+  @@index([lastSeenAt])
+  @@index([createdAt])
 }
 
 // ─────────────────────────── Leagues ───────────────────────────

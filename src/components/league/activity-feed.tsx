@@ -5,17 +5,8 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
 import { UserAvatar } from "@/components/user-avatar";
 import type { ActivityItem } from "@/server/leaderboard";
+import { timeAgo } from "@/lib/time";
 import { cn } from "@/lib/utils";
-
-function relative(ms: number, now: number) {
-  const s = Math.max(0, Math.round((now - ms) / 1000));
-  if (s < 45) return "just now";
-  const m = Math.round(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.round(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.round(h / 24)}d ago`;
-}
 
 export function ActivityFeed({ items, className }: { items: ActivityItem[]; className?: string }) {
   const [now, setNow] = useState(() => Date.now());
@@ -58,7 +49,7 @@ export function ActivityFeed({ items, className }: { items: ActivityItem[]; clas
               <span aria-hidden>{item.emoji}</span>
             </p>
             <time className="shrink-0 text-xs text-muted-foreground" dateTime={new Date(item.createdAt).toISOString()}>
-              {relative(item.createdAt, now)}
+              {timeAgo(item.createdAt, now)}
             </time>
           </motion.li>
         ))}

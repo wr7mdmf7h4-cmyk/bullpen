@@ -26,6 +26,8 @@ const schema = z.object({
   UPSTASH_REDIS_REST_URL: optional,
   UPSTASH_REDIS_REST_TOKEN: optional,
   CRON_SECRET: optional,
+  /** comma-separated emails allowed into /admin; unset = nobody */
+  ADMIN_EMAILS: optional,
   /** "1" = deterministic fake prices for local development/tests. Ignored in production. */
   FAKE_MARKET_DATA: optional,
 });

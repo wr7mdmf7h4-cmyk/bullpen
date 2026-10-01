@@ -39,7 +39,11 @@ describe("formatDuration", () => {
 
 describe("pickActiveLeague", () => {
   const global = { leagueId: "global", joinedAt: new Date("2026-09-30T14:18:00Z"), lastTradeAt: null };
-  const family = { leagueId: "family", joinedAt: new Date("2026-09-30T14:30:00Z"), lastTradeAt: new Date("2026-09-30T15:00:00Z") };
+  const family = {
+    leagueId: "family",
+    joinedAt: new Date("2026-09-30T14:30:00Z"),
+    lastTradeAt: new Date("2026-09-30T15:00:00Z"),
+  };
   const office = { leagueId: "office", joinedAt: new Date("2026-09-30T16:00:00Z"), lastTradeAt: null };
 
   it("uses the league the user picked", () => {

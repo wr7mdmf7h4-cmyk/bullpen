@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LogOut, User } from "lucide-react";
+import { Gauge, LogOut, User } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,7 +13,15 @@ import {
 import { UserAvatar } from "@/components/user-avatar";
 import { logOutAction } from "@/server/actions/auth";
 
-export function UserMenu({ username, avatarSeed }: { username: string; avatarSeed: string }) {
+export function UserMenu({
+  username,
+  avatarSeed,
+  isAdmin = false,
+}: {
+  username: string;
+  avatarSeed: string;
+  isAdmin?: boolean;
+}) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -32,6 +40,13 @@ export function UserMenu({ username, avatarSeed }: { username: string; avatarSee
             <User /> Profile
           </Link>
         </DropdownMenuItem>
+        {isAdmin && (
+          <DropdownMenuItem asChild>
+            <Link href="/admin">
+              <Gauge /> Admin
+            </Link>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem onSelect={() => void logOutAction()}>
           <LogOut /> Log out
         </DropdownMenuItem>

@@ -4,6 +4,7 @@ import { UserMenu } from "@/components/shell/user-menu";
 import { LeagueSwitcher } from "@/components/shell/league-switcher";
 import { StockSearch } from "@/components/shell/stock-search";
 import { getActivePortfolio, getMyPortfolios } from "@/server/leagues/active";
+import { isAdmin } from "@/server/admin";
 import { requireUser } from "@/server/users";
 
 export default async function GameLayout({ children }: LayoutProps<"/">) {
@@ -23,7 +24,7 @@ export default async function GameLayout({ children }: LayoutProps<"/">) {
           <div className="ml-auto flex items-center gap-2">
             <StockSearch />
             <LeagueSwitcher leagues={leagues} activeId={active.leagueId} />
-            <UserMenu username={user.username} avatarSeed={user.avatarSeed} />
+            <UserMenu username={user.username} avatarSeed={user.avatarSeed} isAdmin={isAdmin(user.email)} />
           </div>
         </div>
       </header>

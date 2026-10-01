@@ -52,8 +52,20 @@ export const getCurrentUser = cache(async () => {
   const session = await auth();
   const id = session?.user?.id;
   if (!id) return null;
-  return db.user.findUnique({ where: { id } });
+  const user = await db.user.findUnique({ where: { id } });
+  if (user) await touchLastSeen(user.id, user.lastSeenAt);
+  return user;
 });
+
+const LAST_SEEN_THROTTLE_MS = 2 * 60_000;
+
+/** Records activity for the admin dashboard, at most one write every couple of minutes. */
+async function touchLastSeen(userId: string, lastSeenAt: Date | null, now = new Date()) {
+  if (lastSeenAt && now.getTime() - lastSeenAt.getTime() < LAST_SEEN_THROTTLE_MS) return;
+  await db.user
+    .update({ where: { id: userId }, data: { lastSeenAt: now } })
+    .catch((e) => console.error("[users] lastSeen update failed", e));
+}
 
 /** For pages/actions that need a fully onboarded user. */
 export async function requireUser(returnTo?: string) {

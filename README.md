@@ -57,6 +57,11 @@ A multiplayer paper-trading game: everyone starts with $10,000, trades real US s
 
 - Email + password (argon2id), optional Google OAuth, username onboarding, generated avatars (DiceBear, rendered locally)
 - Public profile pages with stats, standings in every league, badges and trade history
+- Each account remembers which league it's viewing (on every device), defaulting to the one used most recently
+
+**Admin**
+
+- `/admin`, visible only to the emails in `ADMIN_EMAILS` (a 404 for everyone else): players, sign-ups (24h / 7d / 30d and a 30-day chart), who's online now, active users, latest trades and newest players, refreshing itself every 10 seconds
 
 ---
 
@@ -256,6 +261,7 @@ Open http://localhost:3000 and sign up. Set `FINNHUB_API_KEY` for real prices, o
 | `ABLY_API_KEY`                                        |          | Push updates instead of polling                               |
 | `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` |          | Distributed rate limiting                                     |
 | `CRON_SECRET`                                         |          | Protects the daily snapshot cron                              |
+| `ADMIN_EMAILS`                                        |          | Comma-separated emails allowed into `/admin` (unset = nobody) |
 | `TEST_DATABASE_URL`                                   | tests    | Disposable database for integration tests (it gets truncated) |
 
 Every variable is documented in [`.env.example`](.env.example).
