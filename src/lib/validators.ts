@@ -62,6 +62,7 @@ export const createLeagueSchema = z
     startingCashDollars: z.coerce.number().int().min(1_000, "At least $1,000").max(1_000_000, "At most $1,000,000"),
     feeFlatCents: z.coerce.number().int().min(0).max(10_000, "Flat fee at most $100"),
     feeBps: z.coerce.number().int().min(0).max(500, "Fee at most 5%"),
+    portfolioMode: z.enum(["SEPARATE", "LINKED"]).default("SEPARATE"),
   })
   .refine((v) => v.endsAt > v.startsAt, { message: "End must be after start", path: ["endsAt"] })
   .refine((v) => v.endsAt.getTime() - v.startsAt.getTime() <= 366 * 86_400_000, {

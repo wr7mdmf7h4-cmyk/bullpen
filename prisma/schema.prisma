@@ -59,23 +59,32 @@ enum LeagueKind {
   PRIVATE
 }
 
+/// SEPARATE: everyone gets a fresh portfolio in the league.
+/// LINKED: everyone plays with their main (Global League) portfolio and is
+/// ranked by its return since they joined the league.
+enum PortfolioMode {
+  SEPARATE
+  LINKED
+}
+
 model League {
-  id                String     @id @default(cuid())
-  kind              LeagueKind @default(PRIVATE)
+  id                String        @id @default(cuid())
+  kind              LeagueKind    @default(PRIVATE)
   name              String
   /// null for the Global league
-  inviteCode        String?    @unique
+  inviteCode        String?       @unique
   ownerId           String?
-  owner             User?      @relation("LeagueOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  owner             User?         @relation("LeagueOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   startsAt          DateTime
   /// null = never ends
   endsAt            DateTime?
-  startingCashCents Int        @default(1000000)
-  feeFlatCents      Int        @default(100)
+  startingCashCents Int           @default(1000000)
+  feeFlatCents      Int           @default(100)
   /// basis points of notional: 10 bps = 0.10%
-  feeBps            Int        @default(10)
-  maxMembers        Int        @default(100)
-  createdAt         DateTime   @default(now())
+  feeBps            Int           @default(10)
+  maxMembers        Int           @default(100)
+  portfolioMode     PortfolioMode @default(SEPARATE)
+  createdAt         DateTime      @default(now())
 
   portfolios Portfolio[]
   activity   ActivityEvent[]
@@ -96,6 +105,9 @@ model Portfolio {
   realizedPnlCents Int      @default(0)
   feesPaidCents    Int      @default(0)
   tradeCount       Int      @default(0)
+  /// LINKED leagues only: the main portfolio\'s value when the player joined
+  /// (the line their return in this league is measured from)
+  baselineCents    Int?
   joinedAt         DateTime @default(now())
 
   user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)

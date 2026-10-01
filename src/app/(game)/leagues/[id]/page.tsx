@@ -38,16 +38,25 @@ export default async function LeaguePage({ params }: PageProps<"/leagues/[id]">)
           )}
         </div>
         <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">
-          <div>
-            <dt className="inline">Starting cash </dt>
-            <dd className="num inline text-foreground">{formatCents(league.startingCashCents)}</dd>
-          </div>
-          <div>
-            <dt className="inline">Fees </dt>
-            <dd className="inline text-foreground">
-              {describeFees({ flatCents: league.feeFlatCents, bps: league.feeBps })}
-            </dd>
-          </div>
+          {league.portfolioMode === "LINKED" ? (
+            <div>
+              <dt className="inline">Portfolios </dt>
+              <dd className="inline text-foreground">main portfolios, ranked by return since joining</dd>
+            </div>
+          ) : (
+            <>
+              <div>
+                <dt className="inline">Starting cash </dt>
+                <dd className="num inline text-foreground">{formatCents(league.startingCashCents)}</dd>
+              </div>
+              <div>
+                <dt className="inline">Fees </dt>
+                <dd className="inline text-foreground">
+                  {describeFees({ flatCents: league.feeFlatCents, bps: league.feeBps })}
+                </dd>
+              </div>
+            </>
+          )}
           <div>
             <dt className="inline">Players </dt>
             <dd className="inline text-foreground">{league._count.portfolios}</dd>
@@ -74,7 +83,12 @@ export default async function LeaguePage({ params }: PageProps<"/leagues/[id]">)
                 <InviteLink code={league.inviteCode} />
               </div>
             )}
-            <LeaveLeagueButton leagueId={league.id} leagueName={league.name} isOwner={league.ownerId === user.id} />
+            <LeaveLeagueButton
+              leagueId={league.id}
+              leagueName={league.name}
+              isOwner={league.ownerId === user.id}
+              linked={league.portfolioMode === "LINKED"}
+            />
           </div>
         )}
       </header>

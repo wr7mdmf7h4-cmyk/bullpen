@@ -4,7 +4,7 @@ import { db } from "../db";
 import { getQuote, PriceUnavailableError, usesRealQuotes } from "../market";
 import { findInstrument } from "../instruments";
 import { ensureReferenceData } from "../reference-data";
-import { leagueStatus, formatDuration } from "@/domain/leagues";
+import { formatDuration, leagueStatus, SYSTEM_LEAGUES } from "@/domain/leagues";
 import { marketClosedMessage, marketStatus } from "@/domain/market/status";
 import { applyBuy, applySell, exceedsSlippage, isExecutableQuote, validateOrder, type Side } from "@/domain/trading";
 import type { ActivityPayload } from "@/domain/activity";
@@ -84,10 +84,17 @@ export async function executeTrade(req: TradeRequest): Promise<TradeResult> {
   const now = req.now ?? new Date();
   await ensureReferenceData();
 
-  const portfolio = await db.portfolio.findUnique({
+  let portfolio = await db.portfolio.findUnique({
     where: { userId_leagueId: { userId: req.userId, leagueId: req.leagueId } },
     include: { league: true },
   });
+  // A linked league has no portfolio of its own: trades go to the main one.
+  if (portfolio?.league.portfolioMode === "LINKED") {
+    portfolio = await db.portfolio.findUnique({
+      where: { userId_leagueId: { userId: req.userId, leagueId: SYSTEM_LEAGUES.global.id } },
+      include: { league: true },
+    });
+  }
   if (!portfolio) throw new TradeError("NOT_A_MEMBER", "You're not a member of this league.");
   const { league } = portfolio;
 
@@ -225,8 +232,22 @@ export async function executeTrade(req: TradeRequest): Promise<TradeResult> {
           priceCents: order.priceCents,
           realizedPnlCents,
         };
-        await tx.activityEvent.create({
-          data: { leagueId: league.id, userId: req.userId, type: "TRADE", payload, createdAt: now },
+        // Trades in the main portfolio also count in every linked league.
+        const linked =
+          league.kind === "GLOBAL"
+            ? await tx.portfolio.findMany({
+                where: { userId: req.userId, league: { portfolioMode: "LINKED" } },
+                select: { leagueId: true },
+              })
+            : [];
+        await tx.activityEvent.createMany({
+          data: [league.id, ...linked.map((l) => l.leagueId)].map((leagueId) => ({
+            leagueId,
+            userId: req.userId,
+            type: "TRADE" as const,
+            payload,
+            createdAt: now,
+          })),
         });
 
         return { kind: "filled" as const, trade, cashCents: updated.cashCents };

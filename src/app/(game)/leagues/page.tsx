@@ -62,6 +62,11 @@ export default async function LeaguesPage({ searchParams }: PageProps<"/leagues"
                     <h2 className="truncate font-semibold">{p.league.name}</h2>
                     <div className="mt-1 flex flex-wrap gap-1.5">
                       <LeagueStatusBadge league={p.league} now={now} />
+                      {p.league.portfolioMode === "LINKED" && (
+                        <span className="rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground">
+                          Main portfolio
+                        </span>
+                      )}
                     </div>
                   </div>
                   <ChevronRight className="size-5 text-muted-foreground transition-transform group-hover:translate-x-0.5" />

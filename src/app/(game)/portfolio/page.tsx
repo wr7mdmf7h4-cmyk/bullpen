@@ -22,8 +22,10 @@ export default async function PortfolioPage() {
       <header>
         <h1 className="text-3xl font-semibold tracking-tight">Portfolio</h1>
         <p className="text-sm text-muted-foreground">
-          {detail.league.name} · fees{" "}
-          {describeFees({ flatCents: detail.league.feeFlatCents, bps: detail.league.feeBps })}
+          {active.linked
+            ? `Main portfolio · counts in ${active.viewLeague.name} and every other linked league`
+            : detail.league.name}{" "}
+          · fees {describeFees({ flatCents: detail.league.feeFlatCents, bps: detail.league.feeBps })}
         </p>
       </header>
 

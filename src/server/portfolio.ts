@@ -75,7 +75,11 @@ export async function maybeRecordSnapshot(portfolioId: string, now = new Date())
 
 /** Daily cron: snapshot every portfolio in a league that is still running. */
 export async function snapshotAllPortfolios(now = new Date()) {
-  const portfolios = await db.portfolio.findMany({ include: portfolioInclude });
+  // Linked-league memberships hold no money of their own; their main portfolio is snapshotted instead.
+  const portfolios = await db.portfolio.findMany({
+    where: { league: { portfolioMode: "SEPARATE" } },
+    include: portfolioInclude,
+  });
   const active = portfolios.filter((p) => leagueStatus(p.league, now) === "ACTIVE");
   const values = await valuePortfolios(active, now);
   const takenAt = new Date(Math.floor(now.getTime() / 60_000) * 60_000);

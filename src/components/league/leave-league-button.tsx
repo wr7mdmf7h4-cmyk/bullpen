@@ -21,10 +21,13 @@ export function LeaveLeagueButton({
   leagueId,
   leagueName,
   isOwner,
+  linked = false,
 }: {
   leagueId: string;
   leagueName: string;
   isOwner: boolean;
+  /** plays with main portfolios: leaving doesn't touch any money */
+  linked?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -51,8 +54,9 @@ export function LeaveLeagueButton({
         <AlertDialogHeader>
           <AlertDialogTitle>Leave {leagueName}?</AlertDialogTitle>
           <AlertDialogDescription>
-            Your portfolio in this league (cash, holdings and trade history) will be deleted and you&apos;ll drop off
-            the leaderboard. This can&apos;t be undone.
+            {linked
+              ? "You'll drop off this league's leaderboard. Your main portfolio isn't affected. If you rejoin, your return is measured from that moment."
+              : "Your portfolio in this league (cash, holdings and trade history) will be deleted and you'll drop off the leaderboard. This can't be undone."}
             {isOwner && " You own this league, so ownership passes to the longest-standing member."}
           </AlertDialogDescription>
         </AlertDialogHeader>

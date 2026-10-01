@@ -33,8 +33,8 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
   const newlyUnlocked = await evaluateAchievements(user.id, now).catch(() => []);
   const [{ props }, leaderboard, activity, achievements] = await Promise.all([
     loadPortfolioOverview(active.id, now),
-    getLeaderboard(active.leagueId, now),
-    getActivity(active.leagueId, 8),
+    getLeaderboard(active.viewLeagueId, now),
+    getActivity(active.viewLeagueId, 8),
     db.userAchievement.findMany({ where: { userId: user.id } }),
   ]);
   const me = leaderboard.find((r) => r.userId === user.id);
@@ -56,7 +56,12 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
         )}
       </header>
 
-      <PortfolioOverview key={props.portfolioId} {...props} compact />
+      <PortfolioOverview
+        key={props.portfolioId}
+        {...props}
+        leagueName={active.linked ? `your main portfolio (${active.viewLeague.name} follows it)` : props.leagueName}
+        compact
+      />
 
       <div className="grid gap-10 lg:grid-cols-2">
         <section className="grid content-start gap-3" aria-labelledby="standings">
@@ -64,7 +69,10 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
             <h2 id="standings" className="text-lg font-semibold">
               {me ? `You're #${me.rank} of ${leaderboard.length}` : "Standings"}
             </h2>
-            <Link href={`/leagues/${active.leagueId}`} className="inline-flex items-center gap-1 text-sm text-primary">
+            <Link
+              href={`/leagues/${active.viewLeagueId}`}
+              className="inline-flex items-center gap-1 text-sm text-primary"
+            >
               Full leaderboard <ArrowRight className="size-3.5" />
             </Link>
           </div>

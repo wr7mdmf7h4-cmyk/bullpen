@@ -1,8 +1,8 @@
 import "server-only";
 import { cache } from "react";
 import { db } from "../db";
-import { pickActiveLeague } from "@/domain/leagues";
-import { joinSystemLeagues } from "./membership";
+import { pickActiveLeague, SYSTEM_LEAGUES } from "@/domain/leagues";
+import { getMainPortfolio, joinSystemLeagues } from "./membership";
 
 /** All leagues the user plays in, system leagues first. */
 export const getMyPortfolios = cache(async (userId: string) => {
@@ -17,8 +17,13 @@ export const getMyPortfolios = cache(async (userId: string) => {
 
 /**
  * The league the user is currently "in" (picked in the header switcher and
- * saved on their account). Markets, stock pages and the portfolio all follow
- * it. With no saved pick, it's the league they used most recently.
+ * saved on their account) and the portfolio they trade with there. Markets,
+ * stock pages and the portfolio all follow it. With no saved pick, it's the
+ * league they used most recently.
+ *
+ * In a LINKED league the user plays with their main (Global League)
+ * portfolio, so the returned portfolio is that one; `viewLeague` is always
+ * the league being looked at (for its leaderboard, feed and name).
  */
 export const getActivePortfolio = cache(async (userId: string) => {
   let portfolios = await getMyPortfolios(userId);
@@ -40,7 +45,16 @@ export const getActivePortfolio = cache(async (userId: string) => {
     portfolios.map((p) => ({ leagueId: p.leagueId, joinedAt: p.joinedAt, lastTradeAt: lastTradeAt.get(p.id) ?? null })),
     user?.activeLeagueId ?? null,
   );
-  return portfolios.find((p) => p.leagueId === leagueId) ?? portfolios[0]!;
+  const membership = portfolios.find((p) => p.leagueId === leagueId) ?? portfolios[0]!;
+  const linked = membership.league.portfolioMode === "LINKED";
+  const trading = linked
+    ? (portfolios.find((p) => p.leagueId === SYSTEM_LEAGUES.global.id) ??
+      (await db.portfolio.findUniqueOrThrow({
+        where: { id: (await getMainPortfolio(userId)).id },
+        include: { league: true },
+      })))
+    : membership;
+  return { ...trading, viewLeague: membership.league, viewLeagueId: membership.leagueId, linked };
 });
 
 /** Saves the league the app should show for this user, on every device. */

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { evaluateAchievements, type UnlockedAchievement } from "../achievements";
+import { db } from "../db";
 import { invalidateLeaderboard } from "../leaderboard";
 import { recordSnapshot } from "../portfolio";
 import { rateLimit } from "../rate-limit";
@@ -56,8 +57,14 @@ export async function placeTradeAction(input: z.input<typeof tradeSchema>): Prom
         console.error("[trade] achievements failed", e);
         return [];
       });
-      invalidateLeaderboard(parsed.data.leagueId);
-      await notifyLeague(parsed.data.leagueId, "activity");
+      // The trade's league, plus every linked league that follows this portfolio.
+      const linked = await db.portfolio
+        .findMany({ where: { userId: user.id, league: { portfolioMode: "LINKED" } }, select: { leagueId: true } })
+        .catch(() => []);
+      for (const leagueId of new Set([parsed.data.leagueId, ...linked.map((l) => l.leagueId)])) {
+        invalidateLeaderboard(leagueId);
+        await notifyLeague(leagueId, "activity");
+      }
     }
     revalidatePath("/", "layout");
 

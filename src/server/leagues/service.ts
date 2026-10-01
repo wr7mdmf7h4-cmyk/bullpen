@@ -12,6 +12,7 @@ export type CreateLeagueInput = {
   startingCashCents: number;
   feeFlatCents: number;
   feeBps: number;
+  portfolioMode: "SEPARATE" | "LINKED";
 };
 
 /** Creates a private league with a unique invite code; the owner joins automatically. */

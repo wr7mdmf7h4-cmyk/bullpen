@@ -8,6 +8,7 @@ import { evaluateAchievements } from "../achievements";
 import { invalidateLeaderboard } from "../leaderboard";
 import { notifyLeague } from "../realtime";
 import { setActiveLeague } from "../leagues/active";
+import { DEFAULT_FEE_BPS, DEFAULT_FEE_FLAT_CENTS, DEFAULT_STARTING_CASH_CENTS } from "@/domain/leagues";
 import { LeagueFullError } from "../leagues/membership";
 import {
   createLeague,
@@ -45,7 +46,23 @@ export async function createLeagueAction(_prev: ActionResult | undefined, formDa
     return { ok: false, error: "Check the highlighted fields", fieldErrors: z.flattenError(parsed.error).fieldErrors };
   }
   const { startingCashDollars, ...rest } = parsed.data;
-  const league = await createLeague(user.id, { ...rest, startingCashCents: startingCashDollars * 100 });
+  const linked = rest.portfolioMode === "LINKED";
+  if (linked && rest.endsAt <= new Date()) {
+    return { ok: false, error: "Pick an end date in the future", fieldErrors: { endsAt: ["Must be in the future"] } };
+  }
+  const league = await createLeague(
+    user.id,
+    linked
+      ? // Everyone plays with their main portfolio: it starts now, and cash and fees come from that portfolio.
+        {
+          ...rest,
+          startsAt: new Date(),
+          startingCashCents: DEFAULT_STARTING_CASH_CENTS,
+          feeFlatCents: DEFAULT_FEE_FLAT_CENTS,
+          feeBps: DEFAULT_FEE_BPS,
+        }
+      : { ...rest, startingCashCents: startingCashDollars * 100 },
+  );
   await evaluateAchievements(user.id).catch(() => []);
   await setActiveLeague(user.id, league.id);
   revalidatePath("/", "layout");

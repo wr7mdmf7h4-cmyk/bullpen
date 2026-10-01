@@ -13,6 +13,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
 import { createLeagueAction, joinLeagueAction } from "@/server/actions/leagues";
 import type { ActionResult } from "@/lib/validators";
@@ -59,6 +60,8 @@ export function JoinLeagueForm() {
 export function CreateLeagueDialog() {
   const [state, action] = useActionState(createLeagueAction, undefined);
   const errors = errorsOf(state);
+  const [mode, setMode] = useState<"SEPARATE" | "LINKED">("SEPARATE");
+  const linked = mode === "LINKED";
   const [defaults] = useState(() => {
     const start = new Date(Date.now() + 5 * 60_000);
     start.setSeconds(0, 0);
@@ -75,12 +78,14 @@ export function CreateLeagueDialog() {
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>New private league</DialogTitle>
-          <DialogDescription>Everyone who joins gets a fresh portfolio. Highest return % wins.</DialogDescription>
+          <DialogDescription>Highest return % wins.</DialogDescription>
         </DialogHeader>
         <form
           action={(fd) => {
+            // Linked leagues start straight away.
+            if (linked) fd.set("startsAt", new Date().toISOString());
             // datetime-local has no zone: convert to an ISO instant in the browser's zone
-            for (const k of ["startsAt", "endsAt"]) {
+            for (const k of linked ? ["endsAt"] : ["startsAt", "endsAt"]) {
               const v = fd.get(k);
               if (typeof v === "string" && v) fd.set(k, new Date(v).toISOString());
             }
@@ -101,19 +106,57 @@ export function CreateLeagueDialog() {
             {errors.name && <p className="text-xs text-loss">{errors.name[0]}</p>}
           </div>
 
+          <fieldset className="grid gap-2">
+            <legend className="mb-1.5 text-sm font-medium">Portfolios</legend>
+            <input type="hidden" name="portfolioMode" value={mode} />
+            <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Portfolios">
+              {(
+                [
+                  {
+                    value: "SEPARATE",
+                    title: "Fresh start",
+                    text: "Everyone gets new cash just for this league.",
+                  },
+                  {
+                    value: "LINKED",
+                    title: "Main portfolios",
+                    text: "Everyone plays with their main portfolio. Ranked by return since joining.",
+                  },
+                ] as const
+              ).map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={mode === o.value}
+                  onClick={() => setMode(o.value)}
+                  className={cn(
+                    "grid gap-0.5 rounded-xl border p-3 text-left transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring",
+                    mode === o.value ? "border-primary bg-primary/10" : "hover:bg-accent",
+                  )}
+                >
+                  <span className="text-sm font-semibold">{o.title}</span>
+                  <span className="text-xs text-muted-foreground">{o.text}</span>
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
           <p className="-mt-1 rounded-xl border bg-background/40 px-3 py-2 text-xs text-muted-foreground">
-            Real US market: live prices, trading 9:30am–4pm ET on weekdays.
+            {linked
+              ? "Starts now. Trades in your main portfolio count here, and nobody gets a head start: what counts is how much you gain after joining."
+              : "Real US market: live prices, trading 9:30am–4pm ET on weekdays."}
           </p>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-1.5">
+          <div className={cn("grid gap-3", linked ? "grid-cols-1" : "grid-cols-2")}>
+            <div className={cn("grid gap-1.5", linked && "hidden")}>
               <Label htmlFor="startsAt">Starts</Label>
               <Input
                 id="startsAt"
                 name="startsAt"
                 type="datetime-local"
                 defaultValue={defaults.start}
-                required
+                required={!linked}
                 className="h-11 rounded-xl"
               />
             </div>
@@ -131,7 +174,7 @@ export function CreateLeagueDialog() {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className={cn("grid grid-cols-3 gap-3", linked && "hidden")}>
             <div className="grid gap-1.5">
               <Label htmlFor="cash">Starting $</Label>
               <Input
@@ -173,9 +216,11 @@ export function CreateLeagueDialog() {
               />
             </div>
           </div>
-          <p className="-mt-2 text-xs text-muted-foreground">
-            Default fees: $1.00 flat + 10 bps (0.10%) of each order.
-          </p>
+          {!linked && (
+            <p className="-mt-2 text-xs text-muted-foreground">
+              Default fees: $1.00 flat + 10 bps (0.10%) of each order.
+            </p>
+          )}
           {(errors.startingCashDollars || errors.feeFlatCents || errors.feeBps) && (
             <p className="text-xs text-loss">
               {errors.startingCashDollars?.[0] ?? errors.feeFlatCents?.[0] ?? errors.feeBps?.[0]}

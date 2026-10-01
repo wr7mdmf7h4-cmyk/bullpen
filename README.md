@@ -43,7 +43,7 @@ A multiplayer paper-trading game: everyone starts with $10,000, trades real US s
 **Multiplayer**
 
 - Everyone auto-joins the **Global League**
-- Private leagues with invite links: start/end dates, starting cash and fees; members can **leave** a league (ownership passes on; empty leagues are removed) and the host can **rename** it
+- Private leagues with invite links, in two flavours: **fresh start** (everyone gets new cash just for the league: start/end dates, starting cash and fees) or **main portfolios** (everyone plays with their Global League portfolio, so one trade counts in every linked league, ranked by return since joining so nobody starts ahead; final standings freeze at the end date); members can **leave** a league (ownership passes on; empty leagues are removed) and the host can **rename** it
 - Live leaderboards ranked by return %, a podium, animated re-ordering and a real-time activity feed (“sam bought 20 NVDA 🚀”)
 
 **Game layer**

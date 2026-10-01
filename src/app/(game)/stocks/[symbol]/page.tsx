@@ -121,14 +121,14 @@ export default async function StockPage({ params }: PageProps<"/stocks/[symbol]"
             <TradeHistory
               trades={trades}
               showSymbol={false}
-              emptyText={`You haven't traded ${def.symbol} in ${league.name} yet.`}
+              emptyText={`You haven't traded ${def.symbol} in ${portfolio.linked ? "your main portfolio" : league.name} yet.`}
             />
           </section>
         </div>
         <aside className="lg:sticky lg:top-20 lg:self-start">
           <TradePanel
             leagueId={league.id}
-            leagueName={league.name}
+            leagueName={portfolio.linked ? `your main portfolio (counts in ${portfolio.viewLeague.name})` : league.name}
             symbol={def.symbol}
             fees={{ flatCents: league.feeFlatCents, bps: league.feeBps }}
             cashCents={portfolio.cashCents}

@@ -23,7 +23,7 @@ export default async function GameLayout({ children }: LayoutProps<"/">) {
           <DesktopNav username={user.username} />
           <div className="ml-auto flex items-center gap-2">
             <StockSearch />
-            <LeagueSwitcher leagues={leagues} activeId={active.leagueId} />
+            <LeagueSwitcher leagues={leagues} activeId={active.viewLeagueId} />
             <UserMenu username={user.username} avatarSeed={user.avatarSeed} isAdmin={isAdmin(user.email)} />
           </div>
         </div>
