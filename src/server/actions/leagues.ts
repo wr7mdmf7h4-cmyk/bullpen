@@ -1,6 +1,5 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -8,23 +7,12 @@ import { db } from "../db";
 import { evaluateAchievements } from "../achievements";
 import { invalidateLeaderboard } from "../leaderboard";
 import { notifyLeague } from "../realtime";
-import { ACTIVE_LEAGUE_COOKIE } from "../leagues/active";
-import { SYSTEM_LEAGUES } from "@/domain/leagues";
+import { setActiveLeague } from "../leagues/active";
 import { LeagueFullError } from "../leagues/membership";
 import { createLeague, joinByInvite, JoinError, leaveLeague, LeaveError } from "../leagues/service";
 import { rateLimit } from "../rate-limit";
 import { requireUser } from "../users";
 import { createLeagueSchema, inviteCodeSchema, type ActionResult } from "@/lib/validators";
-
-async function setActiveLeagueCookie(leagueId: string) {
-  (await cookies()).set(ACTIVE_LEAGUE_COOKIE, leagueId, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 365,
-  });
-}
 
 export async function setActiveLeagueAction(leagueId: string): Promise<ActionResult> {
   const user = await requireUser();
@@ -34,7 +22,7 @@ export async function setActiveLeagueAction(leagueId: string): Promise<ActionRes
     select: { id: true },
   });
   if (!member) return { ok: false, error: "You're not in that league" };
-  await setActiveLeagueCookie(id);
+  await setActiveLeague(user.id, id);
   revalidatePath("/", "layout");
   return { ok: true };
 }
@@ -51,7 +39,8 @@ export async function createLeagueAction(_prev: ActionResult | undefined, formDa
   const { startingCashDollars, ...rest } = parsed.data;
   const league = await createLeague(user.id, { ...rest, startingCashCents: startingCashDollars * 100 });
   await evaluateAchievements(user.id).catch(() => []);
-  await setActiveLeagueCookie(league.id);
+  await setActiveLeague(user.id, league.id);
+  revalidatePath("/", "layout");
   redirect(`/leagues/${league.id}?created=1`);
 }
 
@@ -74,7 +63,8 @@ export async function joinLeagueAction(_prev: ActionResult | undefined, formData
     throw err;
   }
   invalidateLeaderboard(leagueId);
-  await setActiveLeagueCookie(leagueId);
+  await setActiveLeague(user.id, leagueId);
+  revalidatePath("/", "layout");
   redirect(`/leagues/${leagueId}?joined=1`);
 }
 
@@ -95,8 +85,8 @@ export async function leaveLeagueAction(leagueId: string): Promise<ActionResult>
     invalidateLeaderboard(id);
     await notifyLeague(id, "leaderboard");
   }
-  const jar = await cookies();
-  if (jar.get(ACTIVE_LEAGUE_COOKIE)?.value === id) await setActiveLeagueCookie(SYSTEM_LEAGUES.global.id);
+  // If it was the league on screen, fall back to the most recently used one.
+  await db.user.updateMany({ where: { id: user.id, activeLeagueId: id }, data: { activeLeagueId: null } });
   revalidatePath("/", "layout");
   redirect("/leagues?left=1");
 }

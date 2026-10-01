@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDuration, INVITE_ALPHABET, inviteCodeFromBytes, leagueStatus } from "./leagues";
+import { formatDuration, INVITE_ALPHABET, inviteCodeFromBytes, leagueStatus, pickActiveLeague } from "./leagues";
 
 describe("leagueStatus", () => {
   const league = { startsAt: new Date("2026-03-01"), endsAt: new Date("2026-04-01") };
@@ -34,5 +34,29 @@ describe("formatDuration", () => {
     [86_400_000, "1d"],
   ])("%i ms → %s", (ms, text) => {
     expect(formatDuration(ms)).toBe(text);
+  });
+});
+
+describe("pickActiveLeague", () => {
+  const global = { leagueId: "global", joinedAt: new Date("2026-09-30T14:18:00Z"), lastTradeAt: null };
+  const family = { leagueId: "family", joinedAt: new Date("2026-09-30T14:30:00Z"), lastTradeAt: new Date("2026-09-30T15:00:00Z") };
+  const office = { leagueId: "office", joinedAt: new Date("2026-09-30T16:00:00Z"), lastTradeAt: null };
+
+  it("uses the league the user picked", () => {
+    expect(pickActiveLeague([global, family, office], "global")).toBe("global");
+  });
+
+  it("falls back to the league with the latest trade or join", () => {
+    expect(pickActiveLeague([global, family], null)).toBe("family");
+    expect(pickActiveLeague([global, family, office], null)).toBe("office");
+  });
+
+  it("ignores a saved league the user is no longer in", () => {
+    expect(pickActiveLeague([global, family], "left-long-ago")).toBe("family");
+  });
+
+  it("prefers the earlier entry on a tie (system leagues come first)", () => {
+    const twin = { ...global, leagueId: "twin" };
+    expect(pickActiveLeague([global, twin], null)).toBe("global");
   });
 });

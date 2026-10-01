@@ -1,11 +1,8 @@
 import "server-only";
 import { cache } from "react";
-import { cookies } from "next/headers";
 import { db } from "../db";
-import { SYSTEM_LEAGUES } from "@/domain/leagues";
+import { pickActiveLeague } from "@/domain/leagues";
 import { joinSystemLeagues } from "./membership";
-
-export const ACTIVE_LEAGUE_COOKIE = "bp_league";
 
 /** All leagues the user plays in, system leagues first. */
 export const getMyPortfolios = cache(async (userId: string) => {
@@ -14,13 +11,14 @@ export const getMyPortfolios = cache(async (userId: string) => {
     include: { league: true },
     orderBy: { joinedAt: "asc" },
   });
-  const order = { GLOBAL: 0, PRACTICE: 1, PRIVATE: 2 } as const;
+  const order = { GLOBAL: 0, PRIVATE: 1 } as const;
   return portfolios.sort((a, b) => order[a.league.kind] - order[b.league.kind]);
 });
 
 /**
  * The league the user is currently "in" (picked in the header switcher and
- * stored in a cookie). Markets, stock pages and the portfolio all follow it.
+ * saved on their account). Markets, stock pages and the portfolio all follow
+ * it. With no saved pick, it's the league they used most recently.
  */
 export const getActivePortfolio = cache(async (userId: string) => {
   let portfolios = await getMyPortfolios(userId);
@@ -29,10 +27,23 @@ export const getActivePortfolio = cache(async (userId: string) => {
     await joinSystemLeagues(userId);
     portfolios = await db.portfolio.findMany({ where: { userId }, include: { league: true } });
   }
-  const wanted = (await cookies()).get(ACTIVE_LEAGUE_COOKIE)?.value ?? SYSTEM_LEAGUES.global.id;
-  return (
-    portfolios.find((p) => p.leagueId === wanted) ??
-    portfolios.find((p) => p.leagueId === SYSTEM_LEAGUES.global.id) ??
-    portfolios[0]!
+  const [user, lastTrades] = await Promise.all([
+    db.user.findUnique({ where: { id: userId }, select: { activeLeagueId: true } }),
+    db.trade.groupBy({
+      by: ["portfolioId"],
+      where: { portfolioId: { in: portfolios.map((p) => p.id) } },
+      _max: { executedAt: true },
+    }),
+  ]);
+  const lastTradeAt = new Map(lastTrades.map((t) => [t.portfolioId, t._max.executedAt]));
+  const leagueId = pickActiveLeague(
+    portfolios.map((p) => ({ leagueId: p.leagueId, joinedAt: p.joinedAt, lastTradeAt: lastTradeAt.get(p.id) ?? null })),
+    user?.activeLeagueId ?? null,
   );
+  return portfolios.find((p) => p.leagueId === leagueId) ?? portfolios[0]!;
 });
+
+/** Saves the league the app should show for this user, on every device. */
+export async function setActiveLeague(userId: string, leagueId: string | null) {
+  await db.user.update({ where: { id: userId }, data: { activeLeagueId: leagueId } });
+}

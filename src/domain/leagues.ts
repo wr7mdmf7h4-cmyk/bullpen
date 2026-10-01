@@ -26,6 +26,27 @@ export function leagueStatus(league: LeagueTiming, now: Date): LeagueStatus {
   return "ACTIVE";
 }
 
+export type LeagueActivity = { leagueId: string; joinedAt: Date; lastTradeAt: Date | null };
+
+/**
+ * Which league to show: the one the user picked, if they're still in it,
+ * otherwise the one they used most recently (last trade, or joining it).
+ * Ties keep the earlier entry, so pass system leagues first.
+ */
+export function pickActiveLeague(portfolios: LeagueActivity[], savedLeagueId: string | null): string | undefined {
+  if (savedLeagueId && portfolios.some((p) => p.leagueId === savedLeagueId)) return savedLeagueId;
+  let best: LeagueActivity | undefined;
+  let bestAt = -Infinity;
+  for (const p of portfolios) {
+    const at = Math.max(p.joinedAt.getTime(), p.lastTradeAt?.getTime() ?? -Infinity);
+    if (at > bestAt) {
+      best = p;
+      bestAt = at;
+    }
+  }
+  return best?.leagueId;
+}
+
 // No 0/O/1/I/L to avoid ambiguity when codes are read out loud.
 export const INVITE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 export const INVITE_CODE_LENGTH = 8;
