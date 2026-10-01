@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { LiveRefresh } from "@/components/admin/live-refresh";
+import { DeleteLeagueButton, RemovePlayerButton } from "@/components/admin/moderation-buttons";
 import { SignupsChart } from "@/components/admin/signups-chart";
 import { ADMIN_TIME_ZONE } from "@/domain/admin";
 import { formatCents } from "@/domain/money";
 import { timeAgo } from "@/lib/time";
 import { cn } from "@/lib/utils";
-import { CHART_DAYS, getAdminStats, requireAdmin } from "@/server/admin";
+import { CHART_DAYS, getAdminStats, LIST_LIMIT, requireAdmin } from "@/server/admin";
 
 export const metadata: Metadata = { title: "Admin", robots: { index: false, follow: false } };
 
@@ -47,9 +50,10 @@ function UserLink({ username }: { username: string | null }) {
   );
 }
 
-export default async function AdminPage() {
-  await requireAdmin();
-  const stats = await getAdminStats();
+export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
+  const admin = await requireAdmin();
+  const { q } = await searchParams;
+  const stats = await getAdminStats({ query: typeof q === "string" ? q : "" });
   const now = stats.generatedAt.getTime();
   const { totals } = stats;
   const updatedAt = stats.generatedAt.toLocaleTimeString("en-GB", { timeZone: ADMIN_TIME_ZONE });
@@ -79,7 +83,7 @@ export default async function AdminPage() {
         <Stat
           label="Trades, last 24h"
           value={totals.trades24h}
-          detail={`${number.format(totals.trades)} all time · ${number.format(totals.privateLeagues)} private leagues`}
+          detail={`${number.format(totals.trades)} all time · ${number.format(totals.privateLeagues)} private ${totals.privateLeagues === 1 ? "league" : "leagues"}`}
         />
       </div>
 
@@ -141,10 +145,28 @@ export default async function AdminPage() {
         </Section>
       </div>
 
-      <Section title="Newest players" aside={`${number.format(totals.users)} in total`}>
-        {stats.recentSignups.length ? (
+      <Section
+        title="Players"
+        aside={
+          stats.query
+            ? `${number.format(stats.matchingPlayers)} matching “${stats.query}”`
+            : `Newest first · ${number.format(totals.users)} in total`
+        }
+      >
+        <form action="/admin" className="relative">
+          <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            name="q"
+            defaultValue={stats.query}
+            placeholder="Search by username or email"
+            aria-label="Search players"
+            autoComplete="off"
+            className="h-11 rounded-xl pl-10"
+          />
+        </form>
+        {stats.players.length ? (
           <div className="surface overflow-x-auto">
-            <table className="w-full min-w-[36rem] text-sm">
+            <table className="w-full min-w-[42rem] text-sm">
               <thead>
                 <tr className="border-b text-left text-xs text-muted-foreground">
                   <th className="px-4 py-2.5 font-normal">Player</th>
@@ -152,10 +174,13 @@ export default async function AdminPage() {
                   <th className="px-4 py-2.5 font-normal">Joined</th>
                   <th className="px-4 py-2.5 font-normal">Last seen</th>
                   <th className="px-4 py-2.5 text-right font-normal">Trades</th>
+                  <th className="px-2 py-2.5">
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {stats.recentSignups.map((u) => (
+                {stats.players.map((u) => (
                   <tr key={u.id}>
                     <td className="px-4 py-2.5">
                       <UserLink username={u.username} />
@@ -168,13 +193,46 @@ export default async function AdminPage() {
                       {u.lastSeenAt ? timeAgo(u.lastSeenAt.getTime(), now) : "—"}
                     </td>
                     <td className="num px-4 py-2.5 text-right">{number.format(u.trades)}</td>
+                    <td className="px-2 py-1 text-right whitespace-nowrap">
+                      {u.id === admin.id || u.isAdmin ? (
+                        <span className="px-3 text-xs text-muted-foreground">
+                          {u.id === admin.id ? "You" : "Admin"}
+                        </span>
+                      ) : (
+                        <RemovePlayerButton userId={u.id} confirmation={u.username ?? u.email} />
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         ) : (
-          <Empty>No players yet.</Empty>
+          <Empty>{stats.query ? "No players match that search." : "No players yet."}</Empty>
+        )}
+        {stats.matchingPlayers > stats.players.length && (
+          <p className="text-xs text-muted-foreground">Showing the newest {LIST_LIMIT}. Search to find anyone else.</p>
+        )}
+      </Section>
+
+      <Section title="Private leagues" aside={`Newest first · ${number.format(totals.privateLeagues)} in total`}>
+        {stats.leagues.length ? (
+          <ul className="surface divide-y">
+            {stats.leagues.map((l) => (
+              <li key={l.id} className="flex items-center justify-between gap-3 py-1.5 pr-2 pl-4 text-sm">
+                <div className="grid min-w-0 gap-0.5">
+                  <span className="truncate font-medium">{l.name}</span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    {l.host ? `Host @${l.host}` : "No host"} · {number.format(l.players)}{" "}
+                    {l.players === 1 ? "player" : "players"} · created {timeAgo(l.createdAt.getTime(), now)}
+                  </span>
+                </div>
+                <DeleteLeagueButton leagueId={l.id} name={l.name} players={l.players} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <Empty>No private leagues yet.</Empty>
         )}
       </Section>
     </div>
